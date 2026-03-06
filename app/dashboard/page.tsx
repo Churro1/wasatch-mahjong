@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
+import { User } from "@supabase/supabase-js";
 
 export default function DashboardPage() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
@@ -15,7 +16,7 @@ export default function DashboardPage() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
-        router.push("/auth");
+        router.push("/login");
       } else {
         setUser(user);
       }
@@ -26,12 +27,13 @@ export default function DashboardPage() {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    router.push("/auth");
+    router.push("/login");
   };
 
   const [emailStatus, setEmailStatus] = useState("");
 
   const handleSendTestEmail = async () => {
+    if (!user) return;
     setEmailStatus("Sending...");
     const res = await fetch("/api/send-signup-email", {
       method: "POST",

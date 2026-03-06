@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import "../node_modules/tailwindcss/index.css";
 
 :root {
   --wasatch-red: #9b0000;
@@ -9,8 +9,8 @@
   --wasatch-card: #f5f5f5;
   --background: var(--wasatch-bg1);
   --foreground: #171717;
-  --font-serif: 'Playfair Display', serif;
-  --font-sans: 'Inter', Arial, Helvetica, sans-serif;
+  --app-font-serif: var(--font-serif), "Playfair Display", serif;
+  --app-font-sans: var(--font-sans), "Inter", Arial, Helvetica, sans-serif;
 }
 
 @theme inline {
@@ -20,8 +20,8 @@
   --color-wasatch-blue: var(--wasatch-blue);
   --color-wasatch-gray: var(--wasatch-gray);
   --color-wasatch-card: var(--wasatch-card);
-  --font-serif: var(--font-serif);
-  --font-sans: var(--font-sans);
+  --font-serif: var(--app-font-serif);
+  --font-sans: var(--app-font-sans);
 }
 
 @media (prefers-color-scheme: dark) {

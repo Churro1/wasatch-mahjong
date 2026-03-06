@@ -14,8 +14,9 @@ export function Header() {
         </div>
         <nav className="flex gap-6 text-[color:var(--wasatch-gray)] font-sans text-base font-medium">
           <Link href="/events" className="hover:text-[color:var(--wasatch-red)] transition">Events</Link>
-          <Link href="/classes" className="hover:text-[color:var(--wasatch-red)] transition">Classes</Link>
           <Link href="/contact" className="hover:text-[color:var(--wasatch-red)] transition">Contact</Link>
+          <Link href="/policy" className="hover:text-[color:var(--wasatch-red)] transition">Policy</Link>
+          <Link href="/login" className="hover:text-[color:var(--wasatch-red)] transition">Login</Link>
         </nav>
       </div>
     </header>

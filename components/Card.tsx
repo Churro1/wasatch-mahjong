@@ -7,7 +7,10 @@ export type CardProps = {
 
 export function Card({ children, className = "" }: CardProps) {
   return (
-    <div className={`bg-[color:var(--wasatch-card)] rounded-2xl shadow-md p-6 ${className}`}>
+    <div
+      className={`rounded-2xl shadow-md p-6 ${className}`}
+      style={{ background: "#f5f5f5" }}
+    >
       {children}
     </div>
   );
