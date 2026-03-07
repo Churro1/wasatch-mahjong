@@ -1,10 +1,14 @@
-import nodemailer from 'nodemailer';
+import nodemailer from "nodemailer";
+import { requireEnv } from "@/lib/env";
+
+const gmailUser = requireEnv("GMAIL_USER");
+const gmailPass = requireEnv("GMAIL_PASS");
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  service: "gmail",
   auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_PASS,
+    user: gmailUser,
+    pass: gmailPass,
   },
 });
 
@@ -18,7 +22,7 @@ export async function sendEmail({
   html: string;
 }) {
   const mailOptions = {
-    from: process.env.GMAIL_USER,
+    from: gmailUser,
     to,
     subject,
     html,
