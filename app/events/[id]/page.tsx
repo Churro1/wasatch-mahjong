@@ -13,7 +13,7 @@ type EventDetailItem = {
   title: string;
   date: string;
   time: string;
-  type: "Open Play" | "Class";
+  type: "Open Play" | "Class" | "Custom";
   spots: number;
   price: number;
   description: string;
@@ -45,7 +45,12 @@ export default function EventDetailPage() {
         title: data.name,
         date: format(eventDate, "MMMM d, yyyy"),
         time: format(eventDate, "h:mm a"),
-        type: data.event_type === "class" ? "Class" : "Open Play",
+        type:
+          data.event_type === "class"
+            ? "Class"
+            : data.event_type === "open_play"
+              ? "Open Play"
+              : "Custom",
         spots,
         price: Number(data.price),
         description: data.description || "No description provided.",

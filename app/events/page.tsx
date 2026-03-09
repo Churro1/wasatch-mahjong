@@ -6,7 +6,7 @@ import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { supabase } from "@/lib/supabaseClient";
 
-type EventType = "Open Play" | "Class";
+type EventType = "Open Play" | "Class" | "Custom";
 
 type EventItem = {
   id: string;
@@ -45,10 +45,16 @@ const fallbackEvents: EventItem[] = [
   },
 ];
 
-const eventTypes: Array<"All" | EventType> = ["All", "Open Play", "Class"];
+const eventTypes: Array<"All" | EventType> = ["All", "Open Play", "Class", "Custom"];
 
 function toUiType(value: string | null): EventType {
-  return value === "class" ? "Class" : "Open Play";
+  if (value === "class") {
+    return "Class";
+  }
+  if (value === "open_play") {
+    return "Open Play";
+  }
+  return "Custom";
 }
 
 function toUiEvent(row: {

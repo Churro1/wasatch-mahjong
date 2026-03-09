@@ -25,12 +25,39 @@ function getInitials(user: User | null): string {
 export function Header() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let mounted = true;
+
+    async function loadAdminStatus(userId: string | null) {
+      if (!userId) {
+        if (mounted) {
+          setIsAdmin(false);
+        }
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("admin_users")
+        .select("user_id")
+        .eq("user_id", userId)
+        .limit(1);
+
+      if (!mounted) {
+        return;
+      }
+
+      if (error) {
+        setIsAdmin(false);
+        return;
+      }
+
+      setIsAdmin(Boolean(data && data.length > 0));
+    }
 
     async function loadUser() {
       const {
@@ -40,6 +67,8 @@ export function Header() {
       if (mounted) {
         setUser(currentUser);
       }
+
+      await loadAdminStatus(currentUser?.id ?? null);
     }
 
     loadUser();
@@ -48,6 +77,7 @@ export function Header() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
+      void loadAdminStatus(session?.user?.id ?? null);
     });
 
     return () => {
@@ -94,6 +124,7 @@ export function Header() {
   const handleSignOut = async () => {
     setSigningOut(true);
     await supabase.auth.signOut();
+    setIsAdmin(false);
     setMenuOpen(false);
     setSigningOut(false);
     router.push("/login");
@@ -148,6 +179,16 @@ export function Header() {
                   >
                     Dashboard
                   </Link>
+                  {isAdmin ? (
+                    <Link
+                      href="/admin"
+                      role="menuitem"
+                      className="block rounded-xl px-3 py-2 text-sm text-[color:var(--wasatch-gray)] hover:bg-[color:var(--wasatch-bg2)] hover:text-[color:var(--wasatch-red)] transition"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      Admin Dashboard
+                    </Link>
+                  ) : null}
                   <button
                     type="button"
                     role="menuitem"
