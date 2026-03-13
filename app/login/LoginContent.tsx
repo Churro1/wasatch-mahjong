@@ -32,11 +32,19 @@ export default function LoginContent() {
     }
 
     if (!isLogin) {
-      await fetch("/api/send-signup-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session?.access_token) {
+        await fetch("/api/send-signup-email", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+      }
     }
 
     const next = searchParams.get("next");

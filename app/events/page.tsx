@@ -217,7 +217,7 @@ export default function EventsPage() {
                           <span className="text-[color:var(--wasatch-gray)]">${event.price}</span>
                         </div>
                         {event.spots > 0 ? (
-                          <Link href={`/login?next=${encodeURIComponent(`/checkout?eventId=${event.id}`)}`} className="w-full">
+                          <Link href={`/cart?eventId=${event.id}`} className="w-full">
                             <Button variant="secondary" className="w-full">Sign Up</Button>
                           </Link>
                         ) : (

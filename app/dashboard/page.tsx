@@ -13,23 +13,39 @@ type EventSummary = {
   id: string;
   name: string;
   event_date: string;
-  event_type: "open_play" | "class" | null;
+  event_type: "open_play" | "class" | "custom" | null;
   price: number;
 };
 
-type SignupRow = {
-  id: string;
-  payment_status: string;
-  events: EventSummary | EventSummary[] | null;
+type OrderAttendee = {
+  full_name: string;
+  email: string | null;
+  is_buyer: boolean;
 };
 
-type UpcomingClass = {
-  signupId: string;
+type OrderRow = {
+  id: string;
+  total_amount: number;
+  cancellation_fee_amount: number;
+  events: EventSummary | EventSummary[] | null;
+  checkout_order_attendees: OrderAttendee[] | null;
+};
+
+type UpcomingBooking = {
+  orderId: string;
   title: string;
   eventDate: string;
-  price: number;
-  paymentStatus: string;
+  eventType: EventSummary["event_type"];
+  totalAmount: number;
+  cancellationFeeAmount: number;
+  attendees: OrderAttendee[];
 };
+
+const CANCELLATION_NOTICE_MS = 24 * 60 * 60 * 1000;
+
+function canSelfCancel(eventDate: string) {
+  return parseISO(eventDate).getTime() - Date.now() >= CANCELLATION_NOTICE_MS;
+}
 
 export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -38,11 +54,58 @@ export default function DashboardPage() {
   const [email, setEmail] = useState("");
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileStatus, setProfileStatus] = useState("");
-  const [upcomingClasses, setUpcomingClasses] = useState<UpcomingClass[]>([]);
+  const [upcomingBookings, setUpcomingBookings] = useState<UpcomingBooking[]>([]);
   const [classLoadError, setClassLoadError] = useState("");
+  const [cancelLoadingId, setCancelLoadingId] = useState<string | null>(null);
+  const [cancelStatus, setCancelStatus] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
   const [resetMessage, setResetMessage] = useState("");
   const router = useRouter();
+
+  const loadBookings = async (userId: string) => {
+    const { data: orderData, error: orderError } = await supabase
+      .from("checkout_orders")
+      .select(
+        "id, total_amount, cancellation_fee_amount, events(id, name, event_date, event_type, price), checkout_order_attendees(full_name, email, is_buyer)"
+      )
+      .eq("buyer_user_id", userId)
+      .eq("status", "paid")
+      .order("created_at", { ascending: false });
+
+    if (orderError) {
+      setClassLoadError("We could not load your bookings right now.");
+      return;
+    }
+
+    const now = new Date();
+    const bookings = (orderData as OrderRow[])
+      .map((row) => {
+        const event = Array.isArray(row.events) ? row.events[0] : row.events;
+        if (!event) {
+          return null;
+        }
+
+        const eventDate = parseISO(event.event_date);
+        if (eventDate <= now) {
+          return null;
+        }
+
+        return {
+          orderId: row.id,
+          title: event.name,
+          eventDate: event.event_date,
+          eventType: event.event_type,
+          totalAmount: Number(row.total_amount),
+          cancellationFeeAmount: Number(row.cancellation_fee_amount),
+          attendees: row.checkout_order_attendees || [],
+        };
+      })
+      .filter((item): item is UpcomingBooking => item !== null)
+      .sort((a, b) => a.eventDate.localeCompare(b.eventDate));
+
+    setUpcomingBookings(bookings);
+    setClassLoadError("");
+  };
 
   useEffect(() => {
     const loadDashboard = async () => {
@@ -59,46 +122,66 @@ export default function DashboardPage() {
       setName((user.user_metadata?.full_name as string | undefined) || "");
       setEmail(user.email || "");
 
-      const { data: signupData, error: signupError } = await supabase
-        .from("signups")
-        .select("id, payment_status, events(id, name, event_date, event_type, price)")
-        .order("created_at", { ascending: false });
-
-      if (signupError) {
-        setClassLoadError("We could not load your upcoming classes right now.");
-      } else {
-        const now = new Date();
-        const classes = (signupData as SignupRow[])
-          .map((row) => {
-            const event = Array.isArray(row.events) ? row.events[0] : row.events;
-            if (!event || event.event_type !== "class") {
-              return null;
-            }
-
-            const eventDate = parseISO(event.event_date);
-            if (eventDate <= now) {
-              return null;
-            }
-
-            return {
-              signupId: row.id,
-              title: event.name,
-              eventDate: event.event_date,
-              price: Number(event.price),
-              paymentStatus: row.payment_status,
-            };
-          })
-          .filter((item): item is UpcomingClass => item !== null)
-          .sort((a, b) => a.eventDate.localeCompare(b.eventDate));
-
-        setUpcomingClasses(classes);
-      }
+      await loadBookings(user.id);
 
       setLoading(false);
     };
 
     loadDashboard();
   }, [router]);
+
+  const handleCancelOrder = async (orderId: string, eventDate: string) => {
+    if (!canSelfCancel(eventDate)) {
+      setCancelStatus("Online cancellations close within 24 hours of the event. Please contact Wasatch Mahjong for help.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Cancel this order? Eligible refunds are reduced by the $10 cancellation fee."
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const reason = window.prompt("Optional cancellation note:", "")?.trim() || "";
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const accessToken = session?.access_token;
+
+    if (!accessToken) {
+      router.push(`/login?next=${encodeURIComponent("/dashboard")}`);
+      return;
+    }
+
+    setCancelLoadingId(orderId);
+    setCancelStatus("");
+
+    const response = await fetch("/api/checkout/cancel", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ orderId, reason }),
+    });
+
+    const payload = await response.json();
+
+    if (!response.ok) {
+      setCancelStatus(payload.error || "We could not cancel this order.");
+      setCancelLoadingId(null);
+      return;
+    }
+
+    if (user) {
+      await loadBookings(user.id);
+    }
+
+    setCancelStatus(payload.message || "Order cancelled.");
+    setCancelLoadingId(null);
+  };
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -198,7 +281,7 @@ export default function DashboardPage() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div>
             <h1 className="font-serif text-3xl md:text-4xl font-bold text-[color:var(--wasatch-blue)]">My Dashboard</h1>
-            <p className="text-[color:var(--wasatch-gray)] mt-1">Manage your profile and view your upcoming classes.</p>
+            <p className="text-[color:var(--wasatch-gray)] mt-1">Manage your profile and upcoming bookings.</p>
           </div>
           <Button variant="outline" onClick={handleSignOut}>
             Sign Out
@@ -260,37 +343,74 @@ export default function DashboardPage() {
 
         <Card>
           <div className="flex items-center justify-between gap-3 mb-4">
-            <h2 className="font-serif text-2xl font-bold text-[color:var(--wasatch-red)]">Upcoming Classes</h2>
+            <h2 className="font-serif text-2xl font-bold text-[color:var(--wasatch-red)]">Upcoming Bookings</h2>
             <Link href="/events">
-              <Button variant="outline">Book Another Class</Button>
+              <Button variant="outline">Book Another Event</Button>
             </Link>
           </div>
 
           {classLoadError ? <p className="text-sm text-[color:var(--wasatch-red)]">{classLoadError}</p> : null}
+          {cancelStatus ? <p className="text-sm text-[color:var(--wasatch-blue)] mb-4">{cancelStatus}</p> : null}
 
-          {!classLoadError && upcomingClasses.length === 0 ? (
-            <p className="text-[color:var(--wasatch-gray)]">You do not have any upcoming classes yet.</p>
+          {!classLoadError && upcomingBookings.length === 0 ? (
+            <p className="text-[color:var(--wasatch-gray)]">You do not have any upcoming bookings yet.</p>
           ) : null}
 
-          {!classLoadError && upcomingClasses.length > 0 ? (
+          {!classLoadError && upcomingBookings.length > 0 ? (
             <div className="space-y-3">
-              {upcomingClasses.map((item) => (
+              {upcomingBookings.map((item) => {
+                const refundPreview = Math.max(item.totalAmount - item.cancellationFeeAmount, 0);
+                const eligibleForSelfCancellation = canSelfCancel(item.eventDate);
+
+                return (
                 <div
-                  key={item.signupId}
-                  className="rounded-2xl border border-[color:var(--wasatch-gray)]/30 bg-white px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2"
+                  key={item.orderId}
+                  className="rounded-2xl border border-[color:var(--wasatch-gray)]/30 bg-white px-4 py-4 flex flex-col gap-3"
                 >
-                  <div>
-                    <h3 className="font-serif text-lg font-bold text-[color:var(--wasatch-blue)]">{item.title}</h3>
-                    <p className="text-sm text-[color:var(--wasatch-gray)]">
-                      {format(parseISO(item.eventDate), "EEEE, MMMM d, yyyy 'at' h:mm a")}
-                    </p>
+                  <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                    <div>
+                      <h3 className="font-serif text-lg font-bold text-[color:var(--wasatch-blue)]">{item.title}</h3>
+                      <p className="text-sm text-[color:var(--wasatch-gray)]">
+                        {format(parseISO(item.eventDate), "EEEE, MMMM d, yyyy 'at' h:mm a")}
+                      </p>
+                    </div>
+                    <div className="text-sm text-[color:var(--wasatch-gray)] md:text-right">
+                      <p className="font-medium text-[color:var(--wasatch-red)]">Total: ${(item.totalAmount / 100).toFixed(2)}</p>
+                    </div>
                   </div>
-                  <div className="text-sm text-[color:var(--wasatch-gray)] md:text-right">
-                    <p className="font-medium text-[color:var(--wasatch-red)]">${item.price}</p>
-                    <p>Status: {item.paymentStatus}</p>
+
+                  <div className="rounded-2xl border border-[color:var(--wasatch-gray)]/20 bg-[color:var(--wasatch-bg2)]/35 p-3">
+                    <p className="text-sm font-medium text-[color:var(--wasatch-blue)] mb-2">Attendees</p>
+                    <div className="space-y-1 text-sm text-[color:var(--wasatch-gray)]">
+                      {item.attendees.map((attendee) => (
+                        <p key={`${item.orderId}-${attendee.full_name}-${attendee.email || "no-email"}`}>
+                          {attendee.full_name}
+                          {attendee.is_buyer ? " (buyer)" : ""}
+                          {attendee.email ? ` • ${attendee.email}` : ""}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <div className="text-sm text-[color:var(--wasatch-gray)]">
+                      {eligibleForSelfCancellation ? (
+                        <p>Cancel at least 24 hours ahead to receive ${(refundPreview / 100).toFixed(2)} back after the $10 cancellation fee.</p>
+                      ) : (
+                        <p>Online cancellation closes within 24 hours of the event. Contact Wasatch Mahjong if you need help.</p>
+                      )}
+                    </div>
+                    <Button
+                      variant="outline"
+                      disabled={!eligibleForSelfCancellation || cancelLoadingId === item.orderId}
+                      onClick={() => handleCancelOrder(item.orderId, item.eventDate)}
+                    >
+                      {cancelLoadingId === item.orderId ? "Cancelling..." : "Cancel Booking"}
+                    </Button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           ) : null}
         </Card>

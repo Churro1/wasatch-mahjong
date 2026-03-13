@@ -18,7 +18,7 @@ const faqs = [
   {
     question: "What is your cancellation policy?",
     answer:
-      "Please cancel at least 24 hours in advance from your dashboard for the best chance of a refund based on our policy.",
+      "Cancel from your dashboard at least 24 hours before the event to receive a refund minus the $10 cancellation fee.",
   },
 ];
 
@@ -26,6 +26,7 @@ export default function ContactPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
+  const [website, setWebsite] = useState("");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
 
@@ -37,7 +38,7 @@ export default function ContactPage() {
     const response = await fetch("/api/contact", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, message }),
+      body: JSON.stringify({ name, email, message, website }),
     });
 
     if (!response.ok) {
@@ -65,6 +66,18 @@ export default function ContactPage() {
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="hidden" aria-hidden="true">
+              <label htmlFor="website-field">Website</label>
+              <input
+                id="website-field"
+                type="text"
+                autoComplete="off"
+                tabIndex={-1}
+                value={website}
+                onChange={(e) => setWebsite(e.target.value)}
+              />
+            </div>
+
             <div>
               <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Name</label>
               <input

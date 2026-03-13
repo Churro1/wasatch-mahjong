@@ -20,8 +20,12 @@ cp .env.example .env.local
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
 - `GMAIL_USER`
 - `GMAIL_PASS`
+- `STRIPE_SECRET_KEY`
+- `STRIPE_PUBLISHABLE_KEY` (optional for future client-side Stripe UI)
+- `STRIPE_WEBHOOK_SECRET`
 - `CONTACT_TO_EMAIL` (optional fallback target for contact form notifications)
 
 1. Start the development server from this folder (`wasatch_mahjong`).
@@ -35,6 +39,30 @@ npm run dev
 - Never commit `.env.local`.
 - Keep all credentials in environment variables only.
 - If any secret is exposed, rotate it immediately in the provider console.
+
+## Stripe Checkout Setup
+
+1. Create a Stripe account and copy your secret key into `.env.local` as `STRIPE_SECRET_KEY`.
+
+1. Start a local webhook forwarder to the app.
+
+```bash
+stripe listen --forward-to localhost:3000/api/stripe/webhook
+```
+
+1. Copy the webhook signing secret printed by Stripe into `.env.local` as `STRIPE_WEBHOOK_SECRET`.
+
+1. In Supabase project settings, copy the service role key into `.env.local` as `SUPABASE_SERVICE_ROLE_KEY`.
+
+1. Apply the latest Supabase migration so event records can store Stripe product/price IDs.
+
+```bash
+supabase db push
+```
+
+1. Restart the Next.js dev server after changing env vars.
+
+Hosted checkout creates or reuses Stripe Product/Price records per event, finalizes paid orders from the Stripe webhook, sends confirmation emails, and supports dashboard/admin cancellations with the $10 cancellation fee.
 
 ## Scripts
 

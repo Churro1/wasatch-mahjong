@@ -88,7 +88,7 @@ export default function EventDetailPage() {
         </div>
 
         {event.spots > 0 ? (
-          <Link href={`/login?next=${encodeURIComponent(`/checkout?eventId=${event.id}`)}`}>
+          <Link href={`/cart?eventId=${event.id}`}>
             <Button variant="secondary">Sign Up</Button>
           </Link>
         ) : (

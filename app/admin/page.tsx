@@ -27,6 +27,15 @@ type ManagedEvent = {
   spots_remaining: number;
   series_id: string | null;
   series_position: number | null;
+  signups: Array<{
+    id: string;
+    order_id: string | null;
+    attendee_name: string;
+    attendee_email: string | null;
+    is_buyer: boolean;
+    payment_status: string;
+    signup_status: string;
+  }>;
 };
 
 type EventPreset = {
@@ -104,6 +113,7 @@ function toLocalTimeInput(isoDate: string): string {
 
 export default function AdminPage() {
   const router = useRouter();
+  const cancellationNoticeMs = 24 * 60 * 60 * 1000;
 
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -118,6 +128,7 @@ export default function AdminPage() {
   const [events, setEvents] = useState<ManagedEvent[]>([]);
   const [eventsStatus, setEventsStatus] = useState("");
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
+  const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createStep, setCreateStep] = useState<"type" | "form">("type");
@@ -194,7 +205,7 @@ export default function AdminPage() {
   async function loadEvents() {
     const { data, error } = await supabase
       .from("events")
-      .select("id, name, description, event_date, event_type, price, capacity, spots_remaining, series_id, series_position")
+      .select("id, name, description, event_date, event_type, price, capacity, spots_remaining, series_id, series_position, signups(id, order_id, attendee_name, attendee_email, is_buyer, payment_status, signup_status)")
       .order("event_date", { ascending: true });
 
     if (error) {
@@ -279,28 +290,49 @@ export default function AdminPage() {
       return;
     }
 
-    const userId = adminUserIdInput.trim();
-    if (!userId) {
-      setAdminStatus("Enter a user UUID to add as admin.");
+    const identifier = adminUserIdInput.trim();
+    if (!identifier) {
+      setAdminStatus("Enter an email address or user UUID to add as admin.");
       return;
     }
 
     setAdminSaving(true);
     setAdminStatus("");
 
-    const { error } = await supabase.from("admin_users").insert({
-      user_id: userId,
-      created_by: user.id,
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const accessToken = session?.access_token;
+
+    if (!accessToken) {
+      setAdminStatus("Your session expired. Please sign in again.");
+      setAdminSaving(false);
+      return;
+    }
+
+    const response = await fetch("/api/admin/add-user", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ identifier }),
     });
 
-    if (error) {
-      setAdminStatus(error.message);
+    const payload = await response.json();
+
+    if (!response.ok) {
+      setAdminStatus(payload.error || "Unable to add admin user.");
       setAdminSaving(false);
       return;
     }
 
     setAdminUserIdInput("");
-    setAdminStatus("Admin user added.");
+    setAdminStatus(
+      payload.email
+        ? `Admin user added for ${payload.email}.`
+        : `Admin user added for ${payload.userId}.`
+    );
     await loadAdminUsers();
     setAdminSaving(false);
   };
@@ -790,6 +822,60 @@ export default function AdminPage() {
     setDeletingEventId(null);
   };
 
+  const handleCancelOrder = async (orderId: string, eventDate: string) => {
+    const confirmed = window.confirm(
+      "Cancel this paid order? Any eligible refund will be reduced by the $10 cancellation fee."
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    const reason = window.prompt("Optional cancellation note:", "")?.trim() || "";
+    const currentTime = new Date().getTime();
+    const isInside24Hours = parseISO(eventDate).getTime() - currentTime < cancellationNoticeMs;
+    let adminRefundOverride = false;
+
+    if (isInside24Hours) {
+      adminRefundOverride = window.confirm(
+        "This event is within 24 hours. Click OK to issue a courtesy refund minus the $10 cancellation fee, or Cancel to cancel without refund."
+      );
+    }
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const accessToken = session?.access_token;
+
+    if (!accessToken) {
+      setEventsStatus("Your session expired. Please sign in again.");
+      return;
+    }
+
+    setCancellingOrderId(orderId);
+    setEventsStatus("");
+
+    const response = await fetch("/api/checkout/cancel", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ orderId, reason, adminRefundOverride }),
+    });
+
+    const payload = await response.json();
+
+    if (!response.ok) {
+      setEventsStatus(payload.error || "We could not cancel that order.");
+      setCancellingOrderId(null);
+      return;
+    }
+
+    setEventsStatus(payload.message || "Order cancelled.");
+    await loadEvents();
+    setCancellingOrderId(null);
+  };
+
   if (loading) {
     return (
       <main className="min-h-screen bg-[color:var(--wasatch-bg1)] flex items-center justify-center px-4">
@@ -806,7 +892,7 @@ export default function AdminPage() {
             <h1 className="font-serif text-3xl font-bold text-[color:var(--wasatch-red)] mb-3">Admin Access Required</h1>
             <p className="text-[color:var(--wasatch-gray)] mb-3">{accessMessage}</p>
             <p className="text-[color:var(--wasatch-gray)] text-sm">
-              Ask an existing admin to add your user ID in the Admin Users section, or bootstrap the first admin manually in Supabase.
+              Ask an existing admin to add you by email or user ID in the Admin Access section, or bootstrap the first admin manually in Supabase.
             </p>
           </Card>
         </div>
@@ -819,44 +905,10 @@ export default function AdminPage() {
       <div className="max-w-6xl mx-auto space-y-6">
         <div>
           <h1 className="font-serif text-3xl md:text-4xl font-bold text-[color:var(--wasatch-blue)]">Manager Dashboard</h1>
-          <p className="text-[color:var(--wasatch-gray)] mt-1">Manage admins and create or edit events.</p>
+          <p className="text-[color:var(--wasatch-gray)] mt-1">Create, edit, and manage event bookings.</p>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-3">
-          <Card>
-            <h2 className="font-serif text-2xl font-bold text-[color:var(--wasatch-red)] mb-4">Admin Users</h2>
-            <form onSubmit={handleAddAdmin} className="space-y-3 mb-4">
-              <label className="block text-sm font-medium text-[color:var(--wasatch-gray)]">Add Admin by User UUID</label>
-              <input
-                type="text"
-                value={adminUserIdInput}
-                onChange={(e) => setAdminUserIdInput(e.target.value)}
-                className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[color:var(--wasatch-blue)]"
-                placeholder="00000000-0000-0000-0000-000000000000"
-              />
-              <Button type="submit" variant="primary" disabled={adminSaving}>
-                {adminSaving ? "Adding..." : "Add Admin"}
-              </Button>
-            </form>
-
-            {adminStatus ? <p className="text-sm text-[color:var(--wasatch-blue)] mb-3">{adminStatus}</p> : null}
-
-            <div className="space-y-2">
-              {adminUsers.length === 0 ? (
-                <p className="text-[color:var(--wasatch-gray)] text-sm">No admin users found.</p>
-              ) : (
-                adminUsers.map((adminRow) => (
-                  <div key={adminRow.user_id} className="rounded-xl border border-[color:var(--wasatch-gray)]/30 bg-white px-3 py-2">
-                    <p className="text-xs text-[color:var(--wasatch-gray)] break-all">{adminRow.user_id}</p>
-                    <p className="text-xs text-[color:var(--wasatch-gray)] mt-1">
-                      Added {format(parseISO(adminRow.created_at), "MMM d, yyyy h:mm a")}
-                    </p>
-                  </div>
-                ))
-              )}
-            </div>
-          </Card>
-
+        <div className="grid gap-6 lg:grid-cols-2">
           <Card>
             <h2 className="font-serif text-2xl font-bold text-[color:var(--wasatch-red)] mb-4">Create Event</h2>
             <p className="text-[color:var(--wasatch-gray)] mb-4">
@@ -1028,6 +1080,33 @@ export default function AdminPage() {
                           <span>Spots Remaining: {item.spots_remaining}</span>
                           {item.series_id ? <span className="ml-3">Series #{item.series_position || "-"}</span> : null}
                         </div>
+                        <div className="rounded-2xl border border-[color:var(--wasatch-gray)]/20 bg-[color:var(--wasatch-bg2)]/40 p-3">
+                          <p className="font-semibold text-[color:var(--wasatch-blue)] mb-2">Roster</p>
+                          {item.signups.length === 0 ? (
+                            <p className="text-sm text-[color:var(--wasatch-gray)]">No attendees registered yet.</p>
+                          ) : (
+                            <div className="space-y-2">
+                              {item.signups.map((signup) => (
+                                <div key={signup.id} className="text-sm text-[color:var(--wasatch-gray)]">
+                                  <span className="font-medium text-[color:var(--wasatch-blue)]">{signup.attendee_name}</span>
+                                  <span className="ml-2">{signup.attendee_email || "No email"}</span>
+                                  <span className="ml-2">{signup.payment_status}</span>
+                                  <span className="ml-2">{signup.signup_status}</span>
+                                  {signup.is_buyer && signup.order_id && signup.signup_status === "active" && parseISO(item.event_date) > new Date() ? (
+                                    <Button
+                                      variant="outline"
+                                      className="ml-2"
+                                      disabled={cancellingOrderId === signup.order_id}
+                                      onClick={() => handleCancelOrder(signup.order_id as string, item.event_date)}
+                                    >
+                                      {cancellingOrderId === signup.order_id ? "Cancelling..." : "Cancel Order"}
+                                    </Button>
+                                  ) : null}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </>
                     ) : (
                       <>
@@ -1135,6 +1214,45 @@ export default function AdminPage() {
             </div>
           )}
         </Card>
+
+        <Card>
+          <h2 className="font-serif text-xl font-bold text-[color:var(--wasatch-red)] mb-3">Admin Access</h2>
+          <p className="text-[color:var(--wasatch-gray)] text-sm mb-4">
+            Add another admin by email or user UUID. This section sits below the event tools on purpose.
+          </p>
+
+          <form onSubmit={handleAddAdmin} className="space-y-3 mb-4 max-w-2xl">
+            <label className="block text-sm font-medium text-[color:var(--wasatch-gray)]">Add Admin by Email or UUID</label>
+            <input
+              type="text"
+              value={adminUserIdInput}
+              onChange={(e) => setAdminUserIdInput(e.target.value)}
+              className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[color:var(--wasatch-blue)]"
+              placeholder="name@example.com or 00000000-0000-0000-0000-000000000000"
+            />
+            <Button type="submit" variant="primary" disabled={adminSaving}>
+              {adminSaving ? "Adding..." : "Add Admin"}
+            </Button>
+          </form>
+
+          {adminStatus ? <p className="text-sm text-[color:var(--wasatch-blue)] mb-3">{adminStatus}</p> : null}
+
+          <div className="space-y-2">
+            {adminUsers.length === 0 ? (
+              <p className="text-[color:var(--wasatch-gray)] text-sm">No admin users found.</p>
+            ) : (
+              adminUsers.map((adminRow) => (
+                <div key={adminRow.user_id} className="rounded-xl border border-[color:var(--wasatch-gray)]/30 bg-white px-3 py-2">
+                  <p className="text-xs text-[color:var(--wasatch-gray)] break-all">{adminRow.user_id}</p>
+                  <p className="text-xs text-[color:var(--wasatch-gray)] mt-1">
+                    Added {format(parseISO(adminRow.created_at), "MMM d, yyyy h:mm a")}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+        </Card>
+
       </div>
 
       {createModalOpen ? (

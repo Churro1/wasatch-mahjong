@@ -21,8 +21,8 @@ export default function PolicyPage() {
             <section>
               <h2 className="font-serif text-xl font-bold text-[color:var(--wasatch-red)] mb-2">Cancellations</h2>
               <p>
-                If you need to cancel, please do so from your dashboard as early as possible. Refund eligibility may
-                depend on timing and whether your spot can be reassigned from the waitlist.
+                Cancel from your dashboard at least 24 hours before the event to receive a refund minus the $10
+                cancellation fee. Within 24 hours of the event, online refunds are no longer available.
               </p>
             </section>
 
