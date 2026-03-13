@@ -20,31 +20,6 @@ type EventItem = {
   description: string;
 };
 
-const fallbackEvents: EventItem[] = [
-  {
-    id: "fallback-open-play",
-    title: "Open Play Night",
-    date: "2026-03-10",
-    time: "6:30 PM",
-    type: "Open Play",
-    spots: 12,
-    capacity: 32,
-    price: 30,
-    description: "A fun, casual night of American Mahjong. All skill levels welcome!",
-  },
-  {
-    id: "fallback-class",
-    title: "Beginner Class",
-    date: "2026-03-15",
-    time: "2:00 PM",
-    type: "Class",
-    spots: 4,
-    capacity: 16,
-    price: 50,
-    description: "Learn the basics of American Mahjong in a friendly, supportive environment.",
-  },
-];
-
 const eventTypes: Array<"All" | EventType> = ["All", "Open Play", "Class", "Custom"];
 
 function toUiType(value: string | null): EventType {
@@ -69,7 +44,7 @@ function toUiEvent(row: {
   spots_available?: number | null;
 }): EventItem {
   const parsedDate = parseISO(row.event_date);
-  const capacity = row.capacity ?? (row.event_type === "class" ? 16 : 32);
+  const capacity = row.capacity ?? 0;
   const spots = row.spots_remaining ?? row.spots_available ?? capacity;
 
   return {
@@ -87,7 +62,7 @@ function toUiEvent(row: {
 
 export default function EventsPage() {
   const [filter, setFilter] = useState<"All" | EventType>("All");
-  const [events, setEvents] = useState<EventItem[]>(fallbackEvents);
+  const [events, setEvents] = useState<EventItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [tooltip, setTooltip] = useState<{ event: EventItem; x: number; y: number; visible: boolean } | null>(null);
 
@@ -98,7 +73,7 @@ export default function EventsPage() {
         .select("id, name, description, event_date, event_type, price, capacity, spots_remaining, spots_available")
         .order("event_date", { ascending: true });
 
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         setEvents(data.map(toUiEvent));
       }
       setLoading(false);

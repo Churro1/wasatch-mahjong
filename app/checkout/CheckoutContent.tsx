@@ -13,11 +13,21 @@ type CheckoutEvent = {
   name: string;
   description: string | null;
   event_date: string;
-  event_type: "open_play" | "class" | null;
+  event_type: "open_play" | "class" | "custom" | null;
   price: number;
   spots_remaining: number | null;
   capacity: number | null;
 };
+
+function toCheckoutTypeLabel(type: CheckoutEvent["event_type"]): string {
+  if (type === "class") {
+    return "Class";
+  }
+  if (type === "open_play") {
+    return "Open Play";
+  }
+  return "Custom";
+}
 
 export default function CheckoutContent() {
   const router = useRouter();
@@ -69,7 +79,7 @@ export default function CheckoutContent() {
       }
 
       const normalizedPrice = Number(data.price);
-      if (Number.isNaN(normalizedPrice) || normalizedPrice <= 0) {
+      if (Number.isNaN(normalizedPrice) || normalizedPrice < 0) {
         setError("This event has invalid pricing data. Please contact support.");
         setLoading(false);
         return;
@@ -117,7 +127,7 @@ export default function CheckoutContent() {
                   {format(parseISO(event.event_date), "MMMM d, yyyy")} at {format(parseISO(event.event_date), "h:mm a")}
                 </p>
                 <p className="text-[color:var(--wasatch-blue)] text-sm mt-1">
-                  {event.event_type === "class" ? "Class" : "Open Play"}
+                  {toCheckoutTypeLabel(event.event_type)}
                 </p>
               </div>
 

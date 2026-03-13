@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { User } from "@supabase/supabase-js";
@@ -25,6 +25,20 @@ type ManagedEvent = {
   price: number;
   capacity: number;
   spots_remaining: number;
+  series_id: string | null;
+  series_position: number | null;
+};
+
+type EventPreset = {
+  id: string;
+  name: string;
+  event_type: EventTypeValue;
+  default_title: string;
+  default_description: string | null;
+  default_price: number;
+  default_capacity: number;
+  is_active: boolean;
+  created_at: string;
 };
 
 type CreateFormValues = {
@@ -36,25 +50,24 @@ type CreateFormValues = {
   spotsAvailable: string;
 };
 
-const EVENT_PRESETS: Record<EventTypeValue, Omit<CreateFormValues, "date" | "time">> = {
-  class: {
-    title: "Beginner Mahjong Class",
-    description: "Learn the basics of American Mahjong in a friendly, supportive environment.",
-    cost: "50",
-    spotsAvailable: "16",
-  },
-  open_play: {
-    title: "Open Play Night",
-    description: "A fun, casual night of American Mahjong. All skill levels welcome!",
-    cost: "30",
-    spotsAvailable: "32",
-  },
-  custom: {
-    title: "Special Mahjong Event",
-    description: "",
-    cost: "40",
-    spotsAvailable: "20",
-  },
+type RepeatPattern = "daily" | "weekly" | "biweekly" | "monthly" | "custom";
+type RepeatEndType = "count" | "date";
+type RecurrenceUnit = "day" | "week" | "month";
+
+const DAY_OPTIONS: Array<{ value: number; label: string }> = [
+  { value: 0, label: "Sun" },
+  { value: 1, label: "Mon" },
+  { value: 2, label: "Tue" },
+  { value: 3, label: "Wed" },
+  { value: 4, label: "Thu" },
+  { value: 5, label: "Fri" },
+  { value: 6, label: "Sat" },
+];
+
+const TYPE_DEFAULT_TITLES: Record<EventTypeValue, string> = {
+  class: "Mahjong Class",
+  open_play: "Open Play",
+  custom: "Special Mahjong Event",
 };
 
 function toEventTypeLabel(type: EventTypeValue | null): string {
@@ -69,6 +82,14 @@ function toEventTypeLabel(type: EventTypeValue | null): string {
 
 function toNumber(value: string): number {
   return Number(value);
+}
+
+function toDateDayValue(dateInput: string): number {
+  const parsed = new Date(`${dateInput}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) {
+    return new Date().getDay();
+  }
+  return parsed.getDay();
 }
 
 function toLocalDateInput(isoDate: string): string {
@@ -96,10 +117,12 @@ export default function AdminPage() {
 
   const [events, setEvents] = useState<ManagedEvent[]>([]);
   const [eventsStatus, setEventsStatus] = useState("");
+  const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createStep, setCreateStep] = useState<"type" | "form">("type");
   const [selectedCreateType, setSelectedCreateType] = useState<EventTypeValue | null>(null);
+  const [selectedPresetId, setSelectedPresetId] = useState("");
   const [creatingEvent, setCreatingEvent] = useState(false);
   const [createForm, setCreateForm] = useState<CreateFormValues>({
     title: "",
@@ -110,16 +133,49 @@ export default function AdminPage() {
     spotsAvailable: "",
   });
 
+  const [isRepeating, setIsRepeating] = useState(false);
+  const [repeatSeriesName, setRepeatSeriesName] = useState("");
+  const [repeatPattern, setRepeatPattern] = useState<RepeatPattern>("weekly");
+  const [repeatCustomUnit, setRepeatCustomUnit] = useState<RecurrenceUnit>("week");
+  const [repeatCustomInterval, setRepeatCustomInterval] = useState("1");
+  const [repeatWeekdays, setRepeatWeekdays] = useState<number[]>([]);
+  const [repeatEndType, setRepeatEndType] = useState<RepeatEndType>("count");
+  const [repeatCount, setRepeatCount] = useState("8");
+  const [repeatUntilDate, setRepeatUntilDate] = useState("");
+
+  const [presets, setPresets] = useState<EventPreset[]>([]);
+  const [presetsStatus, setPresetsStatus] = useState("");
+  const [presetSaving, setPresetSaving] = useState(false);
+  const [presetDeletingId, setPresetDeletingId] = useState<string | null>(null);
+  const [presetName, setPresetName] = useState("");
+  const [presetType, setPresetType] = useState<EventTypeValue>("class");
+  const [presetTitle, setPresetTitle] = useState("");
+  const [presetDescription, setPresetDescription] = useState("");
+  const [presetPrice, setPresetPrice] = useState("");
+  const [presetCapacity, setPresetCapacity] = useState("");
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editType, setEditType] = useState<EventTypeValue | null>(null);
   const [editDate, setEditDate] = useState("");
   const [editTime, setEditTime] = useState("");
-  const [editPrice, setEditPrice] = useState("50");
-  const [editCapacity, setEditCapacity] = useState("16");
-  const [editSpots, setEditSpots] = useState("16");
+  const [editPrice, setEditPrice] = useState("0");
+  const [editCapacity, setEditCapacity] = useState("1");
+  const [editSpots, setEditSpots] = useState("1");
   const [savingEdit, setSavingEdit] = useState(false);
+
+  const activePresets = useMemo(
+    () => presets.filter((preset) => preset.is_active),
+    [presets]
+  );
+
+  const presetOptionsForType = useMemo(() => {
+    if (!selectedCreateType) {
+      return activePresets;
+    }
+    return activePresets.filter((preset) => preset.event_type === selectedCreateType);
+  }, [activePresets, selectedCreateType]);
 
   async function loadAdminUsers() {
     const { data, error } = await supabase
@@ -138,7 +194,7 @@ export default function AdminPage() {
   async function loadEvents() {
     const { data, error } = await supabase
       .from("events")
-      .select("id, name, description, event_date, event_type, price, capacity, spots_remaining")
+      .select("id, name, description, event_date, event_type, price, capacity, spots_remaining, series_id, series_position")
       .order("event_date", { ascending: true });
 
     if (error) {
@@ -152,6 +208,28 @@ export default function AdminPage() {
     }));
 
     setEvents(normalized as ManagedEvent[]);
+  }
+
+  async function loadPresets() {
+    const { data, error } = await supabase
+      .from("event_presets")
+      .select(
+        "id, name, event_type, default_title, default_description, default_price, default_capacity, is_active, created_at"
+      )
+      .order("name", { ascending: true });
+
+    if (error) {
+      setPresetsStatus(error.message);
+      return;
+    }
+
+    const normalized = (data || []).map((row) => ({
+      ...row,
+      default_price: Number(row.default_price),
+      default_capacity: Number(row.default_capacity),
+    }));
+
+    setPresets(normalized as EventPreset[]);
   }
 
   useEffect(() => {
@@ -188,7 +266,7 @@ export default function AdminPage() {
       }
 
       setIsAdmin(true);
-      await Promise.all([loadAdminUsers(), loadEvents()]);
+      await Promise.all([loadAdminUsers(), loadEvents(), loadPresets()]);
       setLoading(false);
     }
 
@@ -231,6 +309,7 @@ export default function AdminPage() {
     setEventsStatus("");
     setCreateStep("type");
     setSelectedCreateType(null);
+    setSelectedPresetId("");
     setCreateForm({
       title: "",
       description: "",
@@ -239,6 +318,15 @@ export default function AdminPage() {
       cost: "",
       spotsAvailable: "",
     });
+    setIsRepeating(false);
+    setRepeatSeriesName("");
+    setRepeatPattern("weekly");
+    setRepeatCustomUnit("week");
+    setRepeatCustomInterval("1");
+    setRepeatWeekdays([]);
+    setRepeatEndType("count");
+    setRepeatCount("8");
+    setRepeatUntilDate("");
     setCreateModalOpen(true);
   };
 
@@ -249,19 +337,92 @@ export default function AdminPage() {
     setCreateModalOpen(false);
   };
 
-  const selectCreateType = (type: EventTypeValue) => {
-    const preset = EVENT_PRESETS[type];
-    setSelectedCreateType(type);
+  const applyPresetToCreateForm = (preset: EventPreset) => {
+    setSelectedCreateType(preset.event_type);
+    setSelectedPresetId(preset.id);
     setCreateForm({
-      title: preset.title,
-      description: preset.description,
-      date: "",
-      time: "",
-      cost: preset.cost,
-      spotsAvailable: preset.spotsAvailable,
+      title: preset.default_title,
+      description: preset.default_description || "",
+      date: createForm.date,
+      time: createForm.time,
+      cost: String(preset.default_price),
+      spotsAvailable: String(preset.default_capacity),
     });
+  };
+
+  const selectCreateType = (type: EventTypeValue) => {
+    const firstPreset = activePresets.find((preset) => preset.event_type === type);
+    setSelectedCreateType(type);
+    if (firstPreset) {
+      setSelectedPresetId(firstPreset.id);
+      setCreateForm({
+        title: firstPreset.default_title,
+        description: firstPreset.default_description || "",
+        date: "",
+        time: "",
+        cost: String(firstPreset.default_price),
+        spotsAvailable: String(firstPreset.default_capacity),
+      });
+    } else {
+      setSelectedPresetId("");
+      setCreateForm({
+        title: TYPE_DEFAULT_TITLES[type],
+        description: "",
+        date: "",
+        time: "",
+        cost: "",
+        spotsAvailable: "",
+      });
+    }
+
+    setRepeatWeekdays((current) => {
+      if (current.length > 0) {
+        return current;
+      }
+      return [];
+    });
+
     setCreateStep("form");
   };
+
+  const handleLoadPreset = (presetId: string) => {
+    setSelectedPresetId(presetId);
+    if (!presetId) {
+      return;
+    }
+    const preset = presets.find((item) => item.id === presetId);
+    if (!preset) {
+      return;
+    }
+    applyPresetToCreateForm(preset);
+  };
+
+  const handleStartCreateFromPreset = (preset: EventPreset) => {
+    openCreateModal();
+    setCreateStep("form");
+    setSelectedCreateType(preset.event_type);
+    setSelectedPresetId(preset.id);
+    setCreateForm({
+      title: preset.default_title,
+      description: preset.default_description || "",
+      date: "",
+      time: "",
+      cost: String(preset.default_price),
+      spotsAvailable: String(preset.default_capacity),
+    });
+  };
+
+  const toggleRepeatWeekday = (weekday: number) => {
+    setRepeatWeekdays((current) => {
+      if (current.includes(weekday)) {
+        return current.filter((day) => day !== weekday);
+      }
+      return [...current, weekday].sort((a, b) => a - b);
+    });
+  };
+
+  const recurrenceNeedsWeekdays =
+    isRepeating && (repeatPattern === "weekly" || repeatPattern === "biweekly" || (repeatPattern === "custom" && repeatCustomUnit === "week"));
 
   const handleCreateEvent = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -284,17 +445,14 @@ export default function AdminPage() {
 
     const selectedCost = toNumber(createForm.cost);
     const selectedSpots = toNumber(createForm.spotsAvailable);
-    const isPresetType = selectedCreateType === "class" || selectedCreateType === "open_play";
 
-    if (!isPresetType) {
-      if (Number.isNaN(selectedCost) || selectedCost < 0) {
-        setEventsStatus("Cost must be 0 or greater.");
-        return;
-      }
-      if (Number.isNaN(selectedSpots) || selectedSpots <= 0) {
-        setEventsStatus("Spots available must be greater than 0.");
-        return;
-      }
+    if (Number.isNaN(selectedCost) || selectedCost < 0) {
+      setEventsStatus("Cost must be 0 or greater.");
+      return;
+    }
+    if (Number.isNaN(selectedSpots) || selectedSpots <= 0) {
+      setEventsStatus("Spots available must be greater than 0.");
+      return;
     }
 
     if (!createForm.title.trim()) {
@@ -305,22 +463,112 @@ export default function AdminPage() {
     setCreatingEvent(true);
     setEventsStatus("");
 
-    const normalizedPrice =
-      selectedCreateType === "class" ? 50 : selectedCreateType === "open_play" ? 30 : selectedCost;
-    const normalizedCapacity =
-      selectedCreateType === "class" ? 16 : selectedCreateType === "open_play" ? 32 : selectedSpots;
+    if (!isRepeating) {
+      const { error } = await supabase.from("events").insert({
+        name: createForm.title.trim(),
+        description: createForm.description.trim() || null,
+        event_date: eventDate.toISOString(),
+        event_type: selectedCreateType,
+        price: selectedCost,
+        capacity: selectedSpots,
+        spots_remaining: selectedSpots,
+        spots_available: selectedSpots,
+      });
 
-    const eventTypeForDb = selectedCreateType;
+      if (error) {
+        setEventsStatus(error.message);
+        setCreatingEvent(false);
+        return;
+      }
 
-    const { error } = await supabase.from("events").insert({
-      name: createForm.title.trim(),
-      description: createForm.description.trim() || null,
-      event_date: eventDate.toISOString(),
-      event_type: eventTypeForDb,
-      price: normalizedPrice,
-      capacity: normalizedCapacity,
-      spots_remaining: normalizedCapacity,
-      spots_available: normalizedCapacity,
+      setEventsStatus("Event created.");
+      setCreateModalOpen(false);
+      await loadEvents();
+      setCreatingEvent(false);
+      return;
+    }
+
+    let recurrenceUnit: RecurrenceUnit = "week";
+    let intervalCount = 1;
+
+    if (repeatPattern === "daily") {
+      recurrenceUnit = "day";
+      intervalCount = 1;
+    } else if (repeatPattern === "weekly") {
+      recurrenceUnit = "week";
+      intervalCount = 1;
+    } else if (repeatPattern === "biweekly") {
+      recurrenceUnit = "week";
+      intervalCount = 2;
+    } else if (repeatPattern === "monthly") {
+      recurrenceUnit = "month";
+      intervalCount = 1;
+    } else {
+      recurrenceUnit = repeatCustomUnit;
+      intervalCount = toNumber(repeatCustomInterval);
+    }
+
+    if (Number.isNaN(intervalCount) || intervalCount <= 0) {
+      setEventsStatus("Repeat interval must be greater than 0.");
+      setCreatingEvent(false);
+      return;
+    }
+
+    let weekdays: number[] | null = null;
+    if (recurrenceNeedsWeekdays) {
+      const fallbackWeekday = toDateDayValue(createForm.date);
+      const sourceDays = repeatWeekdays.length > 0 ? repeatWeekdays : [fallbackWeekday];
+      weekdays = [...new Set(sourceDays)].sort((a, b) => a - b);
+      if (weekdays.length === 0) {
+        setEventsStatus("Choose at least one weekday for weekly repeating events.");
+        setCreatingEvent(false);
+        return;
+      }
+    }
+
+    let endAt: string | null = null;
+    let occurrenceCount: number | null = null;
+
+    if (repeatEndType === "date") {
+      if (!repeatUntilDate) {
+        setEventsStatus("Choose a repeat end date.");
+        setCreatingEvent(false);
+        return;
+      }
+      const repeatEnd = new Date(`${repeatUntilDate}T${createForm.time}`);
+      if (Number.isNaN(repeatEnd.getTime())) {
+        setEventsStatus("Invalid repeat end date.");
+        setCreatingEvent(false);
+        return;
+      }
+      if (repeatEnd < eventDate) {
+        setEventsStatus("Repeat end date must be after the start date.");
+        setCreatingEvent(false);
+        return;
+      }
+      endAt = repeatEnd.toISOString();
+    } else {
+      occurrenceCount = toNumber(repeatCount);
+      if (Number.isNaN(occurrenceCount) || occurrenceCount <= 0) {
+        setEventsStatus("Repeat occurrence count must be greater than 0.");
+        setCreatingEvent(false);
+        return;
+      }
+    }
+
+    const { data, error } = await supabase.rpc("create_event_series_and_generate_events", {
+      p_series_name: repeatSeriesName.trim() || createForm.title.trim(),
+      p_name: createForm.title.trim(),
+      p_description: createForm.description.trim() || null,
+      p_event_type: selectedCreateType,
+      p_price: selectedCost,
+      p_capacity: selectedSpots,
+      p_start_at: eventDate.toISOString(),
+      p_recurrence_unit: recurrenceUnit,
+      p_interval_count: intervalCount,
+      p_weekdays: weekdays,
+      p_end_at: endAt,
+      p_occurrence_count: occurrenceCount,
     });
 
     if (error) {
@@ -329,10 +577,102 @@ export default function AdminPage() {
       return;
     }
 
-    setEventsStatus("Event created.");
+    const createdCount = Array.isArray(data) ? data.length : 0;
+    setEventsStatus(
+      createdCount > 0
+        ? `Created ${createdCount} recurring events.`
+        : "Series was created but no occurrences matched the selected schedule."
+    );
     setCreateModalOpen(false);
     await loadEvents();
     setCreatingEvent(false);
+  };
+
+  const handleSavePreset = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!user) {
+      return;
+    }
+
+    const trimmedName = presetName.trim();
+    const trimmedTitle = presetTitle.trim();
+    const normalizedPrice = toNumber(presetPrice);
+    const normalizedCapacity = toNumber(presetCapacity);
+
+    if (!trimmedName) {
+      setPresetsStatus("Preset name is required.");
+      return;
+    }
+    if (!trimmedTitle) {
+      setPresetsStatus("Preset title is required.");
+      return;
+    }
+    if (Number.isNaN(normalizedPrice) || normalizedPrice < 0) {
+      setPresetsStatus("Preset price must be 0 or greater.");
+      return;
+    }
+    if (Number.isNaN(normalizedCapacity) || normalizedCapacity <= 0) {
+      setPresetsStatus("Preset capacity must be greater than 0.");
+      return;
+    }
+
+    setPresetSaving(true);
+    setPresetsStatus("");
+
+    const { error } = await supabase.from("event_presets").insert({
+      name: trimmedName,
+      event_type: presetType,
+      default_title: trimmedTitle,
+      default_description: presetDescription.trim() || null,
+      default_price: normalizedPrice,
+      default_capacity: normalizedCapacity,
+      created_by: user.id,
+      updated_by: user.id,
+    });
+
+    if (error) {
+      setPresetsStatus(error.message);
+      setPresetSaving(false);
+      return;
+    }
+
+    setPresetName("");
+    setPresetTitle("");
+    setPresetDescription("");
+    setPresetPrice("");
+    setPresetCapacity("");
+    setPresetsStatus("Preset saved.");
+    await loadPresets();
+    setPresetSaving(false);
+  };
+
+  const handleDeletePreset = async (presetId: string) => {
+    const confirmed = window.confirm("Delete this preset?");
+    if (!confirmed) {
+      return;
+    }
+
+    setPresetDeletingId(presetId);
+    setPresetsStatus("");
+
+    const { error } = await supabase
+      .from("event_presets")
+      .delete()
+      .eq("id", presetId);
+
+    if (error) {
+      setPresetsStatus(error.message);
+      setPresetDeletingId(null);
+      return;
+    }
+
+    if (selectedPresetId === presetId) {
+      setSelectedPresetId("");
+    }
+
+    setPresetsStatus("Preset deleted.");
+    await loadPresets();
+    setPresetDeletingId(null);
   };
 
   const beginEdit = (item: ManagedEvent) => {
@@ -354,9 +694,9 @@ export default function AdminPage() {
     setEditType(null);
     setEditDate("");
     setEditTime("");
-    setEditPrice("50");
-    setEditCapacity("16");
-    setEditSpots("16");
+    setEditPrice("0");
+    setEditCapacity("1");
+    setEditSpots("1");
   };
 
   const handleSaveEdit = async (eventId: string) => {
@@ -371,28 +711,17 @@ export default function AdminPage() {
       return;
     }
 
-    const isPresetType = editType === "class" || editType === "open_play";
-    const nextPrice = isPresetType
-      ? editType === "class"
-        ? 50
-        : 30
-      : Number(editPrice);
-    const nextCapacity = isPresetType
-      ? editType === "class"
-        ? 16
-        : 32
-      : Number(editCapacity);
+    const nextPrice = Number(editPrice);
+    const nextCapacity = Number(editCapacity);
     const nextSpots = Number(editSpots);
 
-    if (!isPresetType) {
-      if (Number.isNaN(nextPrice) || nextPrice < 0) {
-        setEventsStatus("Cost must be 0 or greater.");
-        return;
-      }
-      if (Number.isNaN(nextCapacity) || nextCapacity <= 0) {
-        setEventsStatus("Capacity must be greater than 0.");
-        return;
-      }
+    if (Number.isNaN(nextPrice) || nextPrice < 0) {
+      setEventsStatus("Cost must be 0 or greater.");
+      return;
+    }
+    if (Number.isNaN(nextCapacity) || nextCapacity <= 0) {
+      setEventsStatus("Capacity must be greater than 0.");
+      return;
     }
 
     if (Number.isNaN(nextSpots) || nextSpots < 0 || nextSpots > nextCapacity) {
@@ -432,6 +761,35 @@ export default function AdminPage() {
     setSavingEdit(false);
   };
 
+  const handleDeleteEvent = async (eventId: string) => {
+    const confirmed = window.confirm("Delete this event?");
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingEventId(eventId);
+    setEventsStatus("");
+
+    const { error } = await supabase
+      .from("events")
+      .delete()
+      .eq("id", eventId);
+
+    if (error) {
+      if (error.message.toLowerCase().includes("has one or more signups")) {
+        setEventsStatus("Cannot delete this event because it has signups.");
+      } else {
+        setEventsStatus(error.message);
+      }
+      setDeletingEventId(null);
+      return;
+    }
+
+    setEventsStatus("Event deleted.");
+    await loadEvents();
+    setDeletingEventId(null);
+  };
+
   if (loading) {
     return (
       <main className="min-h-screen bg-[color:var(--wasatch-bg1)] flex items-center justify-center px-4">
@@ -464,7 +822,7 @@ export default function AdminPage() {
           <p className="text-[color:var(--wasatch-gray)] mt-1">Manage admins and create or edit events.</p>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-6 lg:grid-cols-3">
           <Card>
             <h2 className="font-serif text-2xl font-bold text-[color:var(--wasatch-red)] mb-4">Admin Users</h2>
             <form onSubmit={handleAddAdmin} className="space-y-3 mb-4">
@@ -492,7 +850,7 @@ export default function AdminPage() {
                     <p className="text-xs text-[color:var(--wasatch-gray)] break-all">{adminRow.user_id}</p>
                     <p className="text-xs text-[color:var(--wasatch-gray)] mt-1">
                       Added {format(parseISO(adminRow.created_at), "MMM d, yyyy h:mm a")}
-+                    </p>
+                    </p>
                   </div>
                 ))
               )}
@@ -502,11 +860,127 @@ export default function AdminPage() {
           <Card>
             <h2 className="font-serif text-2xl font-bold text-[color:var(--wasatch-red)] mb-4">Create Event</h2>
             <p className="text-[color:var(--wasatch-gray)] mb-4">
-              Create Class, Open Play, or Custom events with the right defaults pre-filled.
+              Create one-off or repeating events using manual values or saved presets.
             </p>
             <Button variant="secondary" onClick={openCreateModal}>Create New Event</Button>
 
             {eventsStatus ? <p className="text-sm text-[color:var(--wasatch-blue)] mt-3">{eventsStatus}</p> : null}
+          </Card>
+
+          <Card>
+            <h2 className="font-serif text-2xl font-bold text-[color:var(--wasatch-red)] mb-4">Preset Manager</h2>
+
+            <form onSubmit={handleSavePreset} className="space-y-3 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Preset Name</label>
+                <input
+                  type="text"
+                  value={presetName}
+                  onChange={(e) => setPresetName(e.target.value)}
+                  className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2"
+                  placeholder="Thursday Beginner Class"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Type</label>
+                <select
+                  value={presetType}
+                  onChange={(e) => setPresetType(e.target.value as EventTypeValue)}
+                  className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2"
+                >
+                  <option value="class">Class</option>
+                  <option value="open_play">Open Play</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Default Title</label>
+                <input
+                  type="text"
+                  value={presetTitle}
+                  onChange={(e) => setPresetTitle(e.target.value)}
+                  className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Default Description</label>
+                <textarea
+                  value={presetDescription}
+                  onChange={(e) => setPresetDescription(e.target.value)}
+                  rows={2}
+                  className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Default Price</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="1"
+                    value={presetPrice}
+                    onChange={(e) => setPresetPrice(e.target.value)}
+                    className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Default Capacity</label>
+                  <input
+                    type="number"
+                    min={1}
+                    step="1"
+                    value={presetCapacity}
+                    onChange={(e) => setPresetCapacity(e.target.value)}
+                    className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2"
+                    required
+                  />
+                </div>
+              </div>
+
+              <Button type="submit" variant="primary" disabled={presetSaving}>
+                {presetSaving ? "Saving..." : "Save Preset"}
+              </Button>
+            </form>
+
+            {presetsStatus ? <p className="text-sm text-[color:var(--wasatch-blue)] mb-3">{presetsStatus}</p> : null}
+
+            <div className="space-y-2 max-h-72 overflow-auto pr-1">
+              {activePresets.length === 0 ? (
+                <p className="text-sm text-[color:var(--wasatch-gray)]">No presets yet.</p>
+              ) : (
+                activePresets.map((preset) => (
+                  <div key={preset.id} className="rounded-xl border border-[color:var(--wasatch-gray)]/30 bg-white p-3">
+                    <p className="font-semibold text-[color:var(--wasatch-blue)]">{preset.name}</p>
+                    <p className="text-xs text-[color:var(--wasatch-gray)] mt-1">
+                      {toEventTypeLabel(preset.event_type)} | ${preset.default_price} | {preset.default_capacity} spots
+                    </p>
+                    <div className="flex gap-2 mt-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => handleStartCreateFromPreset(preset)}
+                      >
+                        Load
+                      </Button>
+                      <Button
+                        variant="outline"
+                        disabled={presetDeletingId === preset.id}
+                        onClick={() => handleDeletePreset(preset.id)}
+                      >
+                        {presetDeletingId === preset.id ? "Deleting..." : "Delete"}
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </Card>
         </div>
 
@@ -519,8 +993,7 @@ export default function AdminPage() {
             <div className="space-y-3">
               {events.map((item) => {
                 const isEditing = editingId === item.id;
-                const isPresetType = item.event_type === "class" || item.event_type === "open_play";
-                const maxSpots = isPresetType ? (item.event_type === "class" ? 16 : 32) : item.capacity;
+                const maxSpots = item.capacity;
 
                 return (
                   <div
@@ -540,12 +1013,20 @@ export default function AdminPage() {
                           <Button variant="outline" onClick={() => beginEdit(item)}>
                             Edit Event
                           </Button>
+                          <Button
+                            variant="outline"
+                            disabled={deletingEventId === item.id}
+                            onClick={() => handleDeleteEvent(item.id)}
+                          >
+                            {deletingEventId === item.id ? "Deleting..." : "Delete"}
+                          </Button>
                         </div>
                         <p className="text-[color:var(--wasatch-gray)]">{item.description || "No description."}</p>
                         <div className="text-sm text-[color:var(--wasatch-gray)]">
                           <span className="mr-3">Price: ${item.price}</span>
                           <span className="mr-3">Capacity: {item.capacity}</span>
                           <span>Spots Remaining: {item.spots_remaining}</span>
+                          {item.series_id ? <span className="ml-3">Series #{item.series_position || "-"}</span> : null}
                         </div>
                       </>
                     ) : (
@@ -609,12 +1090,7 @@ export default function AdminPage() {
                               step="1"
                               value={editPrice}
                               onChange={(e) => setEditPrice(e.target.value)}
-                              readOnly={editType === "class" || editType === "open_play"}
-                              className={`w-full rounded-2xl border px-4 py-2 ${
-                                editType === "class" || editType === "open_play"
-                                  ? "border-[color:var(--wasatch-gray)]/50 bg-[color:var(--wasatch-bg2)] text-[color:var(--wasatch-gray)]"
-                                  : "border-[color:var(--wasatch-gray)] bg-white"
-                              }`}
+                              className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2"
                             />
                           </div>
 
@@ -626,12 +1102,7 @@ export default function AdminPage() {
                               step="1"
                               value={editCapacity}
                               onChange={(e) => setEditCapacity(e.target.value)}
-                              readOnly={editType === "class" || editType === "open_play"}
-                              className={`w-full rounded-2xl border px-4 py-2 ${
-                                editType === "class" || editType === "open_play"
-                                  ? "border-[color:var(--wasatch-gray)]/50 bg-[color:var(--wasatch-bg2)] text-[color:var(--wasatch-gray)]"
-                                  : "border-[color:var(--wasatch-gray)] bg-white"
-                              }`}
+                              className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2"
                             />
                           </div>
 
@@ -667,9 +1138,10 @@ export default function AdminPage() {
       </div>
 
       {createModalOpen ? (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center px-4">
-          <div className="w-full max-w-2xl">
-            <Card>
+        <div className="fixed inset-0 z-50 bg-black/40 overflow-y-auto">
+          <div className="min-h-full flex items-start justify-center px-4 py-6">
+            <div className="w-full max-w-2xl">
+              <Card className="max-h-[calc(100vh-3rem)] overflow-y-auto">
               {createStep === "type" ? (
                 <>
                   <h3 className="font-serif text-2xl font-bold text-[color:var(--wasatch-red)] mb-2">Create New Event</h3>
@@ -691,6 +1163,22 @@ export default function AdminPage() {
                   <p className="text-[color:var(--wasatch-gray)] mb-4">
                     Event type: <span className="font-semibold text-[color:var(--wasatch-blue)]">{toEventTypeLabel(selectedCreateType)}</span>
                   </p>
+
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Load Preset</label>
+                    <select
+                      value={selectedPresetId}
+                      onChange={(e) => handleLoadPreset(e.target.value)}
+                      className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2"
+                    >
+                      <option value="">No preset</option>
+                      {presetOptionsForType.map((preset) => (
+                        <option key={preset.id} value={preset.id}>
+                          {preset.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
                   <form onSubmit={handleCreateEvent} className="space-y-3">
                     <div>
@@ -747,12 +1235,8 @@ export default function AdminPage() {
                           step="1"
                           value={createForm.cost}
                           onChange={(e) => setCreateForm((prev) => ({ ...prev, cost: e.target.value }))}
-                          readOnly={selectedCreateType === "class" || selectedCreateType === "open_play"}
-                          className={`w-full rounded-2xl border px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[color:var(--wasatch-blue)] ${
-                            selectedCreateType === "class" || selectedCreateType === "open_play"
-                              ? "border-[color:var(--wasatch-gray)]/50 bg-[color:var(--wasatch-bg2)] text-[color:var(--wasatch-gray)]"
-                              : "border-[color:var(--wasatch-gray)] bg-white"
-                          }`}
+                          className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[color:var(--wasatch-blue)]"
+                          required
                         />
                       </div>
 
@@ -764,19 +1248,163 @@ export default function AdminPage() {
                           step="1"
                           value={createForm.spotsAvailable}
                           onChange={(e) => setCreateForm((prev) => ({ ...prev, spotsAvailable: e.target.value }))}
-                          readOnly={selectedCreateType === "class" || selectedCreateType === "open_play"}
-                          className={`w-full rounded-2xl border px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[color:var(--wasatch-blue)] ${
-                            selectedCreateType === "class" || selectedCreateType === "open_play"
-                              ? "border-[color:var(--wasatch-gray)]/50 bg-[color:var(--wasatch-bg2)] text-[color:var(--wasatch-gray)]"
-                              : "border-[color:var(--wasatch-gray)] bg-white"
-                          }`}
+                          className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[color:var(--wasatch-blue)]"
+                          required
                         />
                       </div>
                     </div>
 
+                    <div className="rounded-2xl border border-[color:var(--wasatch-gray)]/30 p-3 space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="font-semibold text-[color:var(--wasatch-blue)]">Repeating Event</p>
+                        <label className="inline-flex items-center gap-2 text-sm text-[color:var(--wasatch-gray)]">
+                          <input
+                            type="checkbox"
+                            checked={isRepeating}
+                            onChange={(e) => {
+                              setIsRepeating(e.target.checked);
+                              if (e.target.checked && createForm.date && repeatWeekdays.length === 0) {
+                                setRepeatWeekdays([toDateDayValue(createForm.date)]);
+                              }
+                            }}
+                          />
+                          Enable
+                        </label>
+                      </div>
+
+                      {isRepeating ? (
+                        <>
+                          <div>
+                            <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Series Name (optional)</label>
+                            <input
+                              type="text"
+                              value={repeatSeriesName}
+                              onChange={(e) => setRepeatSeriesName(e.target.value)}
+                              className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2"
+                              placeholder="Spring Thursday Series"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Repeat Pattern</label>
+                            <select
+                              value={repeatPattern}
+                              onChange={(e) => {
+                                const value = e.target.value as RepeatPattern;
+                                setRepeatPattern(value);
+                                if (
+                                  (value === "weekly" || value === "biweekly") &&
+                                  createForm.date &&
+                                  repeatWeekdays.length === 0
+                                ) {
+                                  setRepeatWeekdays([toDateDayValue(createForm.date)]);
+                                }
+                              }}
+                              className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2"
+                            >
+                              <option value="daily">Daily</option>
+                              <option value="weekly">Weekly</option>
+                              <option value="biweekly">Every 2 Weeks</option>
+                              <option value="monthly">Monthly</option>
+                              <option value="custom">Custom</option>
+                            </select>
+                          </div>
+
+                          {repeatPattern === "custom" ? (
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Custom Unit</label>
+                                <select
+                                  value={repeatCustomUnit}
+                                  onChange={(e) => setRepeatCustomUnit(e.target.value as RecurrenceUnit)}
+                                  className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2"
+                                >
+                                  <option value="day">Day</option>
+                                  <option value="week">Week</option>
+                                  <option value="month">Month</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Every N Units</label>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  step="1"
+                                  value={repeatCustomInterval}
+                                  onChange={(e) => setRepeatCustomInterval(e.target.value)}
+                                  className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2"
+                                />
+                              </div>
+                            </div>
+                          ) : null}
+
+                          {recurrenceNeedsWeekdays ? (
+                            <div>
+                              <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Weekdays</label>
+                              <div className="flex flex-wrap gap-2">
+                                {DAY_OPTIONS.map((day) => {
+                                  const isSelected = repeatWeekdays.includes(day.value);
+                                  return (
+                                    <button
+                                      key={day.value}
+                                      type="button"
+                                      onClick={() => toggleRepeatWeekday(day.value)}
+                                      className={`px-3 py-1 rounded-full border text-sm ${
+                                        isSelected
+                                          ? "bg-[color:var(--wasatch-blue)] text-white border-[color:var(--wasatch-blue)]"
+                                          : "bg-white text-[color:var(--wasatch-gray)] border-[color:var(--wasatch-gray)]/40"
+                                      }`}
+                                    >
+                                      {day.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ) : null}
+
+                          <div>
+                            <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">End Condition</label>
+                            <select
+                              value={repeatEndType}
+                              onChange={(e) => setRepeatEndType(e.target.value as RepeatEndType)}
+                              className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2"
+                            >
+                              <option value="count">After Number of Occurrences</option>
+                              <option value="date">On End Date</option>
+                            </select>
+                          </div>
+
+                          {repeatEndType === "count" ? (
+                            <div>
+                              <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Occurrences</label>
+                              <input
+                                type="number"
+                                min={1}
+                                step="1"
+                                value={repeatCount}
+                                onChange={(e) => setRepeatCount(e.target.value)}
+                                className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2"
+                              />
+                            </div>
+                          ) : (
+                            <div>
+                              <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">End Date</label>
+                              <input
+                                type="date"
+                                value={repeatUntilDate}
+                                onChange={(e) => setRepeatUntilDate(e.target.value)}
+                                className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2"
+                              />
+                            </div>
+                          )}
+                        </>
+                      ) : null}
+                    </div>
+
                     <div className="flex flex-wrap gap-2 pt-1">
                       <Button type="submit" variant="secondary" disabled={creatingEvent}>
-                        {creatingEvent ? "Creating..." : "Create Event"}
+                        {creatingEvent ? "Creating..." : isRepeating ? "Create Series" : "Create Event"}
                       </Button>
                       <Button type="button" variant="outline" onClick={() => setCreateStep("type")}>
                         Back
@@ -788,7 +1416,8 @@ export default function AdminPage() {
                   </form>
                 </>
               )}
-            </Card>
+              </Card>
+            </div>
           </div>
         </div>
       ) : null}
