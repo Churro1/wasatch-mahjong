@@ -8,7 +8,7 @@ const faqs = [
   {
     question: "Where do I park for events?",
     answer:
-      "Free parking is available onsite. If the main lot is full, overflow parking is available nearby.",
+      "Free parking is available onsite at 3939 S Wasatch Dr, Salt Lake City, UT 84124. Please arrive 10-15 minutes early.",
   },
   {
     question: "Do I need to bring Mahjong tiles?",

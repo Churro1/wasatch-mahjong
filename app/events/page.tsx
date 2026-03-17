@@ -221,7 +221,7 @@ export default function EventsPage() {
                             <Button variant="secondary" className="w-full">Sign Up</Button>
                           </Link>
                         ) : (
-                          <Link href={`/login?next=${encodeURIComponent(`/events/${event.id}`)}`} className="w-full">
+                          <Link href={`/waitlist?eventId=${event.id}`} className="w-full">
                             <Button variant="outline" className="w-full">Join Waitlist</Button>
                           </Link>
                         )}

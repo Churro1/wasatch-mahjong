@@ -78,6 +78,7 @@ export async function POST(req: NextRequest) {
     try {
       const session = event.data.object as Stripe.Checkout.Session;
       const orderId = session.client_reference_id || session.metadata?.orderId;
+      const offerToken = typeof session.metadata?.offerToken === "string" ? session.metadata.offerToken : "";
 
       if (!orderId) {
         console.error("checkout.session.completed missing order reference", { eventId: event.id, sessionId: session.id });
@@ -118,10 +119,36 @@ export async function POST(req: NextRequest) {
 
       const finalized = finalizedCandidate as {
         order_id: string;
+        buyer_user_id: string;
         buyer_email: string | null;
         attendee_count: number;
         total_amount: number;
       };
+
+      if (offerToken) {
+        const { data: claimedOffer } = await supabaseAdmin
+          .from("waitlist_offers")
+          .update({
+            status: "claimed",
+            claimed_at: new Date().toISOString(),
+            claimed_by_user_id: finalized.buyer_user_id,
+            claimed_order_id: finalized.order_id,
+          })
+          .eq("offer_token", offerToken)
+          .eq("status", "active")
+          .select("entry_id")
+          .maybeSingle();
+
+        if (claimedOffer?.entry_id) {
+          await supabaseAdmin
+            .from("waitlist_entries")
+            .update({
+              status: "claimed",
+              claimed_at: new Date().toISOString(),
+            })
+            .eq("id", claimedOffer.entry_id);
+        }
+      }
 
       const { data: orderDetails, error: orderDetailsError } = await supabaseAdmin
         .from("checkout_orders")

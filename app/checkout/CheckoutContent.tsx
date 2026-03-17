@@ -38,7 +38,6 @@ export default function CheckoutContent() {
   const [error, setError] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [event, setEvent] = useState<CheckoutEvent | null>(null);
-  const [continueMessage, setContinueMessage] = useState("");
 
   const checkoutPath = useMemo(() => {
     if (!eventId) {
@@ -93,7 +92,12 @@ export default function CheckoutContent() {
   }, [checkoutPath, eventId, router]);
 
   const handleContinue = () => {
-    setContinueMessage("Payment integration is the next step. No charge has been made yet.");
+    if (!eventId) {
+      setError("Missing event selection. Please return to Events and try again.");
+      return;
+    }
+
+    router.push(`/cart?eventId=${encodeURIComponent(eventId)}`);
   };
 
   return (
@@ -153,14 +157,12 @@ export default function CheckoutContent() {
               ) : null}
 
               <p className="text-sm text-[color:var(--wasatch-gray)]">
-                This checkout page now validates your event and account. Stripe handoff will be wired in next.
+                Continue to cart to confirm attendees and complete payment in secure Stripe checkout.
               </p>
-
-              {continueMessage ? <p className="text-sm text-[color:var(--wasatch-blue)]">{continueMessage}</p> : null}
 
               <div className="flex flex-col sm:flex-row gap-3 pt-1">
                 <Button variant="primary" onClick={handleContinue} className="w-full sm:w-auto">
-                  Continue to Payment
+                  Continue to Cart
                 </Button>
                 <Link href="/events" className="w-full sm:w-auto">
                   <Button variant="outline" className="w-full sm:w-auto">

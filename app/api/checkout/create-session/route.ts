@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { getStripe } from "@/lib/stripe";
+import { dispatchWaitlistOffersForEvent } from "@/lib/waitlist";
 
 type OrderRow = {
   id: string;
@@ -59,6 +60,27 @@ type OrderEvent = {
   stripe_price_unit_amount: number | null;
   stripe_price_currency: string | null;
 };
+
+type ActiveWaitlistOffer = {
+  id: string;
+  offer_token: string;
+  expires_at: string;
+  entry_id: string;
+  waitlist_entries:
+    | {
+        id: string;
+        email: string;
+      }
+    | Array<{
+        id: string;
+        email: string;
+      }>
+    | null;
+};
+
+function normalizeEmail(value: string | null | undefined) {
+  return (value || "").trim().toLowerCase();
+}
 
 async function ensureEventStripePrice(params: {
   stripe: Stripe;
@@ -155,7 +177,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  const { orderId } = await req.json();
+  const { orderId, offerToken } = await req.json();
+  const normalizedOfferToken = typeof offerToken === "string" ? offerToken : "";
   if (!orderId) {
     return NextResponse.json({ error: "Order ID is required." }, { status: 400 });
   }
@@ -197,6 +220,80 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "The buyer must be included as an attendee." }, { status: 400 });
   }
 
+  const userEmail = normalizeEmail(user.email);
+  const nowIso = new Date().toISOString();
+
+  try {
+    await dispatchWaitlistOffersForEvent({
+      supabaseAdmin,
+      event: {
+        id: event.id,
+        name: event.name,
+        event_date: event.event_date,
+        spots_remaining: event.spots_remaining,
+      },
+      origin: req.nextUrl.origin,
+    });
+  } catch (waitlistDispatchError) {
+    return NextResponse.json(
+      {
+        error:
+          waitlistDispatchError instanceof Error
+            ? waitlistDispatchError.message
+            : "Failed to process waitlist offers.",
+      },
+      { status: 500 }
+    );
+  }
+
+  const { data: activeOffersData, error: activeOffersError } = await supabaseAdmin
+    .from("waitlist_offers")
+    .select("id, offer_token, expires_at, entry_id, waitlist_entries(id, email)")
+    .eq("event_id", order.event_id)
+    .eq("status", "active")
+    .gt("expires_at", nowIso);
+
+  if (activeOffersError) {
+    return NextResponse.json({ error: activeOffersError.message }, { status: 500 });
+  }
+
+  const activeOffers = (activeOffersData || []) as ActiveWaitlistOffer[];
+  const matchingOffer = activeOffers.find((offer) => offer.offer_token === normalizedOfferToken);
+
+  if (activeOffers.length > 0) {
+    if (!normalizedOfferToken || !matchingOffer) {
+      return NextResponse.json(
+        {
+          error:
+            "A waitlist offer is currently active for this event. Booking is temporarily reserved for the invited guest.",
+        },
+        { status: 409 }
+      );
+    }
+
+    const matchingEntry = Array.isArray(matchingOffer.waitlist_entries)
+      ? matchingOffer.waitlist_entries[0]
+      : matchingOffer.waitlist_entries;
+    const offerEmail = normalizeEmail(matchingEntry?.email);
+
+    if (!offerEmail || offerEmail !== userEmail) {
+      return NextResponse.json(
+        {
+          error:
+            "This waitlist offer is assigned to a different email address. Sign in with the invited email to claim this spot.",
+        },
+        { status: 403 }
+      );
+    }
+
+    if (attendees.length !== 1) {
+      return NextResponse.json(
+        { error: "Waitlist claim links can only be used for one attendee." },
+        { status: 400 }
+      );
+    }
+  }
+
   if (typeof event.spots_remaining === "number" && attendees.length > event.spots_remaining) {
     return NextResponse.json({ error: "There are not enough spots remaining for this order." }, { status: 400 });
   }
@@ -229,10 +326,14 @@ export async function POST(req: NextRequest) {
 
   let session: Stripe.Checkout.Session;
   try {
+    const cancelUrl = `${origin}/cart?eventId=${encodeURIComponent(order.event_id)}${
+      normalizedOfferToken ? `&offer=${encodeURIComponent(normalizedOfferToken)}` : ""
+    }`;
+
     session = await stripe.checkout.sessions.create({
       mode: "payment",
       success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/cart?eventId=${encodeURIComponent(order.event_id)}`,
+      cancel_url: cancelUrl,
       customer_email: user.email || undefined,
       client_reference_id: order.id,
       metadata: {
@@ -240,6 +341,7 @@ export async function POST(req: NextRequest) {
         eventId: order.event_id,
         buyerUserId: user.id,
         attendeeCount: String(attendeeCount),
+        offerToken: normalizedOfferToken,
       },
       line_items: [
         {

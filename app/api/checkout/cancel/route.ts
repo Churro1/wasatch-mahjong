@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { getStripe } from "@/lib/stripe";
 import { sendEmail } from "@/lib/sendEmail";
+import { dispatchWaitlistOffersForEvent } from "@/lib/waitlist";
 
 const CANCELLATION_NOTICE_MS = 24 * 60 * 60 * 1000;
 
@@ -265,6 +266,21 @@ export async function POST(req: NextRequest) {
         : requesterIsAdmin
           ? "Order cancelled without refund."
           : "Order cancelled. No refund was issued because the event is within 24 hours.";
+
+  try {
+    await dispatchWaitlistOffersForEvent({
+      supabaseAdmin,
+      event: {
+        id: event.id,
+        name: event.name,
+        event_date: event.event_date,
+        spots_remaining: nextSpotsRemaining,
+      },
+      origin: req.nextUrl.origin,
+    });
+  } catch (waitlistError) {
+    console.error("Failed to dispatch waitlist offers after cancellation", waitlistError);
+  }
 
   return NextResponse.json({
     status: nextOrderStatus,

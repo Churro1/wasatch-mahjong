@@ -73,6 +73,7 @@ export default function CartContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const eventId = searchParams.get("eventId");
+  const offerToken = searchParams.get("offer");
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -88,16 +89,22 @@ export default function CartContent() {
     if (!eventId) {
       return "/cart";
     }
-    return `/cart?eventId=${encodeURIComponent(eventId)}`;
-  }, [eventId]);
+    return `/cart?eventId=${encodeURIComponent(eventId)}${
+      offerToken ? `&offer=${encodeURIComponent(offerToken)}` : ""
+    }`;
+  }, [eventId, offerToken]);
 
   const attendeeLimit = useMemo(() => {
+    if (offerToken) {
+      return 1;
+    }
+
     if (!event) {
       return 1;
     }
     const remaining = typeof event.spots_remaining === "number" ? event.spots_remaining : MAX_ATTENDEES;
     return Math.max(1, Math.min(MAX_ATTENDEES, remaining));
-  }, [event]);
+  }, [event, offerToken]);
 
   const subtotal = useMemo(() => {
     if (!event) {
@@ -139,7 +146,11 @@ export default function CartContent() {
         price: Number(eventData.price),
       } as CartEvent;
 
-      if (typeof normalizedEvent.spots_remaining === "number" && normalizedEvent.spots_remaining <= 0) {
+      if (
+        typeof normalizedEvent.spots_remaining === "number" &&
+        normalizedEvent.spots_remaining <= 0 &&
+        !offerToken
+      ) {
         setError("This event is currently full.");
         setEvent(normalizedEvent);
         setLoading(false);
@@ -245,7 +256,7 @@ export default function CartContent() {
     }
 
     loadCart();
-  }, [cartPath, eventId, router]);
+  }, [cartPath, eventId, offerToken, router]);
 
   const handleAttendeeChange = (index: number, field: "full_name" | "email", value: string) => {
     setAttendees((current) =>
@@ -418,7 +429,7 @@ export default function CartContent() {
         "Content-Type": "application/json",
         Authorization: `Bearer ${accessToken}`,
       },
-      body: JSON.stringify({ orderId }),
+      body: JSON.stringify({ orderId, offerToken: offerToken || undefined }),
     });
 
     const responseText = await response.text();
@@ -540,6 +551,11 @@ export default function CartContent() {
               <p className="text-xs text-[color:var(--wasatch-gray)] mt-3">
                 Maximum {attendeeLimit} attendee(s) for this event. The buyer must be one of them.
               </p>
+              {offerToken ? (
+                <p className="text-xs text-[color:var(--wasatch-blue)] mt-2">
+                  This cart is tied to a private waitlist offer and can be used for one seat only.
+                </p>
+              ) : null}
               {statusMessage ? <p className="text-sm text-[color:var(--wasatch-blue)] mt-3">{statusMessage}</p> : null}
             </Card>
 

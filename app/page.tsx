@@ -2,24 +2,6 @@ import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import Link from "next/link";
 
-const placeholderEvents = [
-  {
-    title: "Open Play Night",
-    date: "March 10, 2026",
-    description: "Join us for a fun, casual night of American Mahjong. All skill levels welcome!",
-  },
-  {
-    title: "Beginner Class",
-    date: "March 15, 2026",
-    description: "Learn the basics of American Mahjong in a friendly, supportive environment.",
-  },
-  {
-    title: "Strategy Workshop",
-    date: "March 22, 2026",
-    description: "Take your game to the next level with advanced tips and strategies.",
-  },
-];
-
 export default function Home() {
   return (
     <div className="min-h-screen bg-[color:var(--wasatch-bg1)]">
@@ -37,16 +19,19 @@ export default function Home() {
       {/* Upcoming Events Section */}
       <section className="w-full max-w-5xl mx-auto py-12 px-4">
         <h2 className="font-serif text-2xl md:text-3xl font-bold text-[color:var(--wasatch-blue)] mb-8 text-center">Upcoming Events</h2>
-        <div className="grid gap-8 md:grid-cols-3">
-          {placeholderEvents.map((event, i) => (
-            <Card key={i}>
-              <h3 className="font-serif text-xl font-bold text-[color:var(--wasatch-red)] mb-2">{event.title}</h3>
-              <div className="text-[color:var(--wasatch-gray)] text-sm mb-2">{event.date}</div>
-              <p className="font-sans text-base text-[color:var(--wasatch-gray)] mb-4">{event.description}</p>
-              <Button variant="secondary" className="w-full">Register</Button>
-            </Card>
-          ))}
-        </div>
+        <Card>
+          <div className="text-center space-y-3">
+            <p className="font-sans text-base text-[color:var(--wasatch-gray)]">
+              New classes and open play nights are added regularly.
+            </p>
+            <p className="font-sans text-base text-[color:var(--wasatch-gray)]">
+              Visit the Events page to see the latest schedule and reserve your spot.
+            </p>
+            <Link href="/events" className="inline-block">
+              <Button variant="secondary">See Upcoming Events</Button>
+            </Link>
+          </div>
+        </Card>
       </section>
       {/* Who We Are Section */}
       <section className="w-full max-w-3xl mx-auto py-12 px-4 text-center">
@@ -61,10 +46,10 @@ export default function Home() {
         <h2 className="font-serif text-2xl md:text-3xl font-bold text-[color:var(--wasatch-blue)] mb-4">Location</h2>
         <p className="text-lg text-[color:var(--wasatch-gray)] font-sans mb-2">
           <span className="font-semibold text-[color:var(--wasatch-red)]">Salt Lake City, UT</span><br />
-          <span>INSERT ADDRESS HERE</span>
+          <span>3939 S Wasatch Dr, Salt Lake City, UT 84124</span>
         </p>
         <a
-          href="https://maps.app.goo.gl/D5UuM1xzEbMniPKz8"
+          href="https://maps.app.goo.gl/Kj5bom52uh6Vy2DG8?g_st=ic"
           target="_blank"
           rel="noopener noreferrer"
           className="inline-block mt-2 text-[color:var(--wasatch-blue)] underline hover:text-[color:var(--wasatch-red)] transition"
@@ -72,7 +57,7 @@ export default function Home() {
           View on Google Maps
         </a>
         <div className="text-sm text-[color:var(--wasatch-gray)] mt-4">
-          INSERT ANY ADDITIONAL LOCATION DETAILS OR DIRECTIONS HERE
+          We recommend arriving 10-15 minutes early to get settled before play begins.
         </div>
       </section>
     </div>

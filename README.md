@@ -27,6 +27,7 @@ cp .env.example .env.local
 - `STRIPE_PUBLISHABLE_KEY` (optional for future client-side Stripe UI)
 - `STRIPE_WEBHOOK_SECRET`
 - `CONTACT_TO_EMAIL` (optional fallback target for contact form notifications)
+- `WAITLIST_CRON_SECRET` (secret token for scheduled waitlist processing endpoint)
 
 1. Start the development server from this folder (`wasatch_mahjong`).
 
@@ -70,3 +71,11 @@ Hosted checkout creates or reuses Stripe Product/Price records per event, finali
 - `npm run build`: Create production build.
 - `npm run start`: Start production server from build output.
 - `npm run lint`: Run ESLint.
+
+## Waitlist Automation
+
+The waitlist feature sends a private 24-hour claim link when a spot opens.
+
+- Endpoint: `POST /api/waitlist/process`
+- Header required: `x-waitlist-secret: <WAITLIST_CRON_SECRET>`
+- Schedule this endpoint periodically (for example every 15 minutes) so expired offers advance to the next person in line.

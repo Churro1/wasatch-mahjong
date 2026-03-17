@@ -92,7 +92,7 @@ export default function EventDetailPage() {
             <Button variant="secondary">Sign Up</Button>
           </Link>
         ) : (
-          <Link href={`/login?next=${encodeURIComponent(`/events/${event.id}`)}`}>
+          <Link href={`/waitlist?eventId=${event.id}`}>
             <Button variant="outline">Join Waitlist</Button>
           </Link>
         )}
