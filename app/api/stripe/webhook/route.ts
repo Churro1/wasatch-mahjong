@@ -198,9 +198,12 @@ export async function POST(req: NextRequest) {
       }
 
       try {
-        const buyerEmail = typeof finalized.buyer_email === "string" ? finalized.buyer_email.trim().toLowerCase() : "";
-        const buyerName =
-          (order?.checkout_order_attendees || []).find((attendee) => attendee.is_buyer)?.full_name || "there";
+        const buyerAttendee = (order?.checkout_order_attendees || []).find((attendee) => attendee.is_buyer) || null;
+        const buyerEmailFromOrder = buyerAttendee?.email?.trim().toLowerCase() || "";
+        const buyerEmailFromFinalize =
+          typeof finalized.buyer_email === "string" ? finalized.buyer_email.trim().toLowerCase() : "";
+        const buyerEmail = buyerEmailFromFinalize || buyerEmailFromOrder;
+        const buyerName = buyerAttendee?.full_name || "there";
 
         if (buyerEmail) {
           uniqueEmails.add(buyerEmail);
@@ -221,28 +224,37 @@ export async function POST(req: NextRequest) {
 
         let sentCount = 0;
         for (const recipient of recipients) {
-          const isBuyer = recipient.email === buyerEmail;
-          const emailHtml = isBuyer
-            ? buildBuyerConfirmationEmailHtml({
-                attendeeName: recipient.name,
-                eventName: eventSummary?.name || "Wasatch Mahjong Event",
-                eventDate: eventSummary?.event_date || "",
-                attendeeCount,
-                totalAmount: finalized.total_amount || 0,
-              })
-            : buildGuestConfirmationEmailHtml({
-                attendeeName: recipient.name,
-                eventName: eventSummary?.name || "Wasatch Mahjong Event",
-                eventDate: eventSummary?.event_date || "",
-                buyerName: buyerName,
-              });
+          try {
+            const isBuyer = recipient.email === buyerEmail;
+            const emailHtml = isBuyer
+              ? buildBuyerConfirmationEmailHtml({
+                  attendeeName: recipient.name,
+                  eventName: eventSummary?.name || "Wasatch Mahjong Event",
+                  eventDate: eventSummary?.event_date || "",
+                  attendeeCount,
+                  totalAmount: finalized.total_amount || 0,
+                })
+              : buildGuestConfirmationEmailHtml({
+                  attendeeName: recipient.name,
+                  eventName: eventSummary?.name || "Wasatch Mahjong Event",
+                  eventDate: eventSummary?.event_date || "",
+                  buyerName: buyerName,
+                });
 
-          await sendEmail({
-            to: recipient.email,
-            subject: `Wasatch Mahjong Confirmation: ${eventSummary?.name || "Your Event"}`,
-            html: emailHtml,
-          });
-          sentCount += 1;
+            await sendEmail({
+              to: recipient.email,
+              subject: `Wasatch Mahjong Confirmation: ${eventSummary?.name || "Your Event"}`,
+              html: emailHtml,
+            });
+            sentCount += 1;
+          } catch (recipientEmailError) {
+            console.error("Failed to send confirmation email to recipient", {
+              eventId: event.id,
+              orderId: finalized.order_id,
+              recipientEmail: recipient.email,
+              error: recipientEmailError,
+            });
+          }
         }
 
         if (sentCount > 0) {
