@@ -136,7 +136,7 @@ export function Header() {
       <div className="max-w-5xl mx-auto flex items-center justify-between py-4 px-6 gap-4">
         <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition">
           <Image 
-            src="/WM_logo.png" 
+            src="/WM_logo.png"
             alt="Wasatch Mahjong logo" 
             width={140} 
             height={100}
