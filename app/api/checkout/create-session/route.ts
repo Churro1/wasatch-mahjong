@@ -17,6 +17,7 @@ type OrderRow = {
         id: string;
         full_name: string;
         email: string | null;
+        phone?: string | null;
         is_buyer: boolean;
       }>
     | null;
@@ -186,7 +187,7 @@ export async function POST(req: NextRequest) {
   const { data, error } = await supabaseAdmin
     .from("checkout_orders")
     .select(
-      "id, buyer_user_id, event_id, status, subtotal_amount, total_amount, currency, checkout_order_attendees(id, full_name, email, is_buyer), events(id, name, description, event_date, price, spots_remaining, stripe_product_id, stripe_price_id, stripe_price_unit_amount, stripe_price_currency)"
+      "id, buyer_user_id, event_id, status, subtotal_amount, total_amount, currency, checkout_order_attendees(id, full_name, email, phone, is_buyer), events(id, name, description, event_date, price, spots_remaining, stripe_product_id, stripe_price_id, stripe_price_unit_amount, stripe_price_currency)"
     )
     .eq("id", orderId)
     .eq("buyer_user_id", user.id)

@@ -26,7 +26,7 @@ type OrderDetails = {
     | null;
 };
 
-function buildConfirmationEmailHtml(params: {
+function buildBuyerConfirmationEmailHtml(params: {
   attendeeName: string;
   eventName: string;
   eventDate: string;
@@ -40,6 +40,28 @@ function buildConfirmationEmailHtml(params: {
     <p><strong>Date:</strong> ${params.eventDate}</p>
     <p><strong>Attendees on Order:</strong> ${params.attendeeCount}</p>
     <p><strong>Total Paid:</strong> $${(params.totalAmount / 100).toFixed(2)}</p>
+    <h2>Day Of</h2>
+    <ul>
+      <li>Show up 15 minutes early to get signed in and settled.</li>
+      <li>No need to bring tiles.</li>
+      <li>Bring a card if you want.</li>
+    </ul>
+    <h2>Cancellation Policy</h2>
+    <p>Cancellations require at least 24 hours notice and include a $10 cancellation fee.</p>
+  `;
+}
+
+function buildGuestConfirmationEmailHtml(params: {
+  attendeeName: string;
+  eventName: string;
+  eventDate: string;
+  buyerName: string;
+}) {
+  return `
+    <h1>Wasatch Mahjong Confirmation</h1>
+    <p>Hi ${params.attendeeName},</p>
+    <p><strong>${params.buyerName}</strong> has registered you for <strong>${params.eventName}</strong>.</p>
+    <p><strong>Date:</strong> ${params.eventDate}</p>
     <h2>Day Of</h2>
     <ul>
       <li>Show up 15 minutes early to get signed in and settled.</li>
@@ -199,16 +221,26 @@ export async function POST(req: NextRequest) {
 
         let sentCount = 0;
         for (const recipient of recipients) {
+          const isBuyer = recipient.email === buyerEmail;
+          const emailHtml = isBuyer
+            ? buildBuyerConfirmationEmailHtml({
+                attendeeName: recipient.name,
+                eventName: eventSummary?.name || "Wasatch Mahjong Event",
+                eventDate: eventSummary?.event_date || "",
+                attendeeCount,
+                totalAmount: finalized.total_amount || 0,
+              })
+            : buildGuestConfirmationEmailHtml({
+                attendeeName: recipient.name,
+                eventName: eventSummary?.name || "Wasatch Mahjong Event",
+                eventDate: eventSummary?.event_date || "",
+                buyerName: buyerName,
+              });
+
           await sendEmail({
             to: recipient.email,
             subject: `Wasatch Mahjong Confirmation: ${eventSummary?.name || "Your Event"}`,
-            html: buildConfirmationEmailHtml({
-              attendeeName: recipient.name,
-              eventName: eventSummary?.name || "Wasatch Mahjong Event",
-              eventDate: eventSummary?.event_date || "",
-              attendeeCount,
-              totalAmount: finalized.total_amount || 0,
-            }),
+            html: emailHtml,
           });
           sentCount += 1;
         }

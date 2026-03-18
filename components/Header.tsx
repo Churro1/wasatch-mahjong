@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { User } from "@supabase/supabase-js";
@@ -131,14 +132,18 @@ export function Header() {
   };
 
   return (
-    <header className="w-full bg-[color:var(--wasatch-bg1)] border-b border-[color:var(--wasatch-gray)] shadow-sm">
+    <header className="w-full bg-[color:white] border-b border-[color:var(--wasatch-gray)] shadow-sm">
       <div className="max-w-5xl mx-auto flex items-center justify-between py-4 px-6 gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-[color:var(--wasatch-blue)] flex items-center justify-center text-white font-serif text-2xl font-bold">
-            WM
-          </div>
-          <span className="font-serif text-xl font-bold text-[color:var(--wasatch-blue)] tracking-tight">Wasatch Mahjong</span>
-        </div>
+        <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition">
+          <Image 
+            src="/WM_logo.png" 
+            alt="Wasatch Mahjong logo" 
+            width={140} 
+            height={100}
+            priority
+          />
+          {/* <span className="font-serif text-xl font-bold text-[color:var(--wasatch-blue)] tracking-tight">Wasatch Mahjong</span> */}
+        </Link>
 
         <div className="flex items-center gap-4">
           <nav className="hidden md:flex gap-6 text-[color:var(--wasatch-gray)] font-sans text-base font-medium">

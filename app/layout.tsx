@@ -19,6 +19,9 @@ const playfair = Playfair_Display({
 export const metadata: Metadata = {
   title: "Wasatch Mahjong",
   description: "Wasatch Mahjong events, classes, and open play nights in Salt Lake City.",
+  icons: {
+    icon: "/bird_favicon.png",
+  },
 };
 
 validateStartupEnv();

@@ -24,6 +24,7 @@ type CartOrderAttendee = {
   id?: string;
   full_name: string;
   email: string;
+  phone?: string;
   is_buyer: boolean;
 };
 
@@ -162,7 +163,7 @@ export default function CartContent() {
       const { data: orderData, error: orderError } = await supabase
         .from("checkout_orders")
         .select(
-          "id, event_id, status, subtotal_amount, total_amount, checkout_order_attendees(id, full_name, email, is_buyer)"
+          "id, event_id, status, subtotal_amount, total_amount, checkout_order_attendees(id, full_name, email, phone, is_buyer)"
         )
         .eq("buyer_user_id", currentUser.id)
         .eq("event_id", eventId)
@@ -183,6 +184,7 @@ export default function CartContent() {
         const loadedAttendees = (existingOrder.checkout_order_attendees || []).map((attendee) => ({
           id: attendee.id,
           full_name: attendee.full_name,
+          phone: (attendee as any).phone || "",
           email: attendee.email || "",
           is_buyer: attendee.is_buyer,
         }));
@@ -231,10 +233,10 @@ export default function CartContent() {
         .insert({
           order_id: createdOrder.id,
           full_name: buyerAttendee.full_name || "Buyer",
-          email: buyerAttendee.email || null,
+          phone: null,
           is_buyer: true,
         })
-        .select("id, full_name, email, is_buyer")
+        .select("id, full_name, email, phone, is_buyer")
         .single();
 
       if (attendeeError || !createdAttendee) {
@@ -249,6 +251,7 @@ export default function CartContent() {
           id: createdAttendee.id,
           full_name: createdAttendee.full_name,
           email: createdAttendee.email || "",
+          phone: (createdAttendee as any).phone || "",
           is_buyer: createdAttendee.is_buyer,
         },
       ]);
@@ -258,7 +261,7 @@ export default function CartContent() {
     loadCart();
   }, [cartPath, eventId, offerToken, router]);
 
-  const handleAttendeeChange = (index: number, field: "full_name" | "email", value: string) => {
+  const handleAttendeeChange = (index: number, field: "full_name" | "email" | "phone", value: string) => {
     setAttendees((current) =>
       current.map((attendee, attendeeIndex) =>
         attendeeIndex === index ? { ...attendee, [field]: value } : attendee
@@ -322,6 +325,17 @@ export default function CartContent() {
       return false;
     }
 
+    const buyer = trimmedAttendees.find((attendee) => attendee.is_buyer);
+    if (!buyer || !buyer.phone || buyer.phone.trim().length === 0) {
+      setError("The buyer must provide a phone number.");
+      return false;
+    }
+
+    if (!buyer.email || buyer.email.trim().length === 0) {
+      setError("The buyer must provide an email address.");
+      return false;
+    }
+
     setSaving(true);
     setError("");
     setStatusMessage("");
@@ -346,6 +360,7 @@ export default function CartContent() {
           .update({
             full_name: attendee.full_name,
             email: attendee.email || null,
+            phone: attendee.is_buyer ? attendee.phone || null : null,
             is_buyer: attendee.is_buyer,
           })
           .eq("id", attendee.id);
@@ -361,6 +376,7 @@ export default function CartContent() {
           .insert({
             order_id: orderId,
             full_name: attendee.full_name,
+            phone: attendee.is_buyer ? attendee.phone || null : null,
             email: attendee.email || null,
             is_buyer: attendee.is_buyer,
           })
@@ -530,6 +546,21 @@ export default function CartContent() {
                           className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2"
                         />
                       </div>
+
+                      {attendee.is_buyer ? (
+                        <div>
+                          <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">
+                            Phone <span className="text-[color:var(--wasatch-red)]">*</span>
+                          </label>
+                          <input
+                            type="tel"
+                            value={attendee.phone || ""}
+                            onChange={(e) => handleAttendeeChange(index, "phone", e.target.value)}
+                            className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2"
+                            required
+                          />
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 ))}
