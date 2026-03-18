@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
@@ -36,18 +37,21 @@ export function Footer() {
   }, []);
 
   return (
-    <footer className="w-full bg-[color:var(--wasatch-bg2)] border-t border-[color:var(--wasatch-gray)] mt-12">
+    <footer className="w-full bg-[color:white] border-t border-[color:var(--wasatch-gray)] mt-12">
       <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between py-8 px-6 gap-6 md:gap-0">
         {/* Logo and Name */}
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-[color:var(--wasatch-blue)] flex items-center justify-center text-white font-serif text-2xl font-bold">
-            WM
-          </div>
-          <span className="font-serif text-lg font-bold text-[color:var(--wasatch-blue)] tracking-tight">Wasatch Mahjong</span>
-        </div>
+        <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition">
+          <Image 
+            src="/WM_logo.png"
+            alt="Wasatch Mahjong logo" 
+            width={140} 
+            height={100}
+            priority
+          />
+          {/* <span className="font-serif text-xl font-bold text-[color:var(--wasatch-blue)] tracking-tight">Wasatch Mahjong</span> */}
+        </Link>
         {/* Address */}
         <div className="text-center md:text-left text-[color:var(--wasatch-gray)] text-sm">
-          Salt Lake City, UT<br />
           3939 S Wasatch Dr, Salt Lake City, UT 84124
         </div>
         {/* Helpful Links */}

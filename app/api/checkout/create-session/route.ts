@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { getStripe } from "@/lib/stripe";
+import { getSiteOrigin } from "@/lib/siteUrl";
 import { dispatchWaitlistOffersForEvent } from "@/lib/waitlist";
 
 type OrderRow = {
@@ -162,6 +163,7 @@ async function ensureEventStripePrice(params: {
 export async function POST(req: NextRequest) {
   const supabaseAdmin = getSupabaseAdmin();
   const stripe = getStripe();
+  const siteOrigin = getSiteOrigin(req);
   const authorization = req.headers.get("authorization");
   const accessToken = authorization?.startsWith("Bearer ") ? authorization.slice(7) : null;
 
@@ -233,7 +235,7 @@ export async function POST(req: NextRequest) {
         event_date: event.event_date,
         spots_remaining: event.spots_remaining,
       },
-      origin: req.nextUrl.origin,
+      origin: siteOrigin,
     });
   } catch (waitlistDispatchError) {
     return NextResponse.json(
@@ -307,8 +309,6 @@ export async function POST(req: NextRequest) {
 
   const orderCurrency = (order.currency || "usd").toLowerCase();
   const totalAmount = unitAmount * attendeeCount;
-  const origin = req.nextUrl.origin;
-
   let stripePriceId: string;
   try {
     stripePriceId = await ensureEventStripePrice({
@@ -327,13 +327,13 @@ export async function POST(req: NextRequest) {
 
   let session: Stripe.Checkout.Session;
   try {
-    const cancelUrl = `${origin}/cart?eventId=${encodeURIComponent(order.event_id)}${
+    const cancelUrl = `${siteOrigin}/cart?eventId=${encodeURIComponent(order.event_id)}${
       normalizedOfferToken ? `&offer=${encodeURIComponent(normalizedOfferToken)}` : ""
     }`;
 
     session = await stripe.checkout.sessions.create({
       mode: "payment",
-      success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${siteOrigin}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: cancelUrl,
       customer_email: user.email || undefined,
       client_reference_id: order.id,

@@ -20,6 +20,7 @@ cp .env.example .env.local
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `NEXT_PUBLIC_SITE_URL` (your deployed app URL, e.g. `https://your-app.onrender.com`)
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `GMAIL_USER`
 - `GMAIL_PASS`

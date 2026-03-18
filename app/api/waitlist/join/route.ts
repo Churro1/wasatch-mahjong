@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { enforceRateLimit, getClientIp } from "@/lib/rateLimit";
+import { getSiteOrigin } from "@/lib/siteUrl";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { dispatchWaitlistOffersForEvent, sendWaitlistJoinedEmail } from "@/lib/waitlist";
 
@@ -9,6 +10,7 @@ function isValidEmail(value: string) {
 
 export async function POST(req: NextRequest) {
   const supabaseAdmin = getSupabaseAdmin();
+  const siteOrigin = getSiteOrigin(req);
   const ip = getClientIp(req);
   const rateLimit = enforceRateLimit(`waitlist:${ip}`, 8, 60 * 60 * 1000);
 
@@ -98,7 +100,7 @@ export async function POST(req: NextRequest) {
     await dispatchWaitlistOffersForEvent({
       supabaseAdmin,
       event,
-      origin: req.nextUrl.origin,
+      origin: siteOrigin,
     });
   } catch (offerError) {
     console.error("Failed to dispatch waitlist offers after join", offerError);

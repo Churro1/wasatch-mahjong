@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getSiteOrigin } from "@/lib/siteUrl";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { dispatchWaitlistOffersForEvent } from "@/lib/waitlist";
 
 export async function POST(req: NextRequest) {
+  const siteOrigin = getSiteOrigin(req);
   const configuredSecret = process.env.WAITLIST_CRON_SECRET;
   if (!configuredSecret) {
     return NextResponse.json({ error: "WAITLIST_CRON_SECRET is not configured." }, { status: 500 });
@@ -32,7 +34,7 @@ export async function POST(req: NextRequest) {
       const result = await dispatchWaitlistOffersForEvent({
         supabaseAdmin,
         event,
-        origin: req.nextUrl.origin,
+        origin: siteOrigin,
       });
       offeredCount += result.offered;
     } catch (dispatchError) {

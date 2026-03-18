@@ -44,8 +44,7 @@ export default function Home() {
       {/* Location Section */}
       <section className="w-full max-w-3xl mx-auto py-12 px-4 text-center">
         <h2 className="font-serif text-2xl md:text-3xl font-bold text-[color:var(--wasatch-blue)] mb-4">Location</h2>
-        <p className="text-lg text-[color:var(--wasatch-gray)] font-sans mb-2">
-          <span className="font-semibold text-[color:var(--wasatch-red)]">Salt Lake City, UT</span><br />
+        <p className="text-lg text-[color:var(--wasatch-red)] font-sans mb-2">
           <span>3939 S Wasatch Dr, Salt Lake City, UT 84124</span>
         </p>
         <a

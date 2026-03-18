@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getSiteOrigin } from "@/lib/siteUrl";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { getStripe } from "@/lib/stripe";
 import { sendEmail } from "@/lib/sendEmail";
@@ -65,6 +66,7 @@ function buildCancellationEmailHtml(params: {
 
 export async function POST(req: NextRequest) {
   const supabaseAdmin = getSupabaseAdmin();
+  const siteOrigin = getSiteOrigin(req);
   const stripe = getStripe();
   const authorization = req.headers.get("authorization");
   const accessToken = authorization?.startsWith("Bearer ") ? authorization.slice(7) : null;
@@ -276,7 +278,7 @@ export async function POST(req: NextRequest) {
         event_date: event.event_date,
         spots_remaining: nextSpotsRemaining,
       },
-      origin: req.nextUrl.origin,
+      origin: siteOrigin,
     });
   } catch (waitlistError) {
     console.error("Failed to dispatch waitlist offers after cancellation", waitlistError);
