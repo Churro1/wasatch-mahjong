@@ -1,8 +1,99 @@
+"use client";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import Link from "next/link";
+import { supabase } from "@/lib/supabaseClient";
+import { format, parseISO } from "date-fns";
+
+type EventItem = {
+  id: string;
+  title: string;
+  date: string;
+  time: string;
+  type: "Open Play" | "Class" | "Custom";
+  spots: number;
+  capacity: number;
+  price: number;
+  description: string;
+};
+
+function toUiEvent(row: {
+  id: string;
+  name: string;
+  description: string | null;
+  event_date: string;
+  event_type: string | null;
+  price: number;
+  capacity?: number | null;
+  spots_remaining?: number | null;
+  spots_available?: number | null;
+}): EventItem {
+  const parsedDate = parseISO(row.event_date);
+  const capacity = row.capacity ?? 0;
+  const spots = row.spots_remaining ?? row.spots_available ?? capacity;
+
+  return {
+    id: row.id,
+    title: row.name,
+    date: format(parsedDate, "MMM d, yyyy"),
+    time: format(parsedDate, "h:mm a"),
+    type: row.event_type === "class" ? "Class" : row.event_type === "open_play" ? "Open Play" : "Custom",
+    spots,
+    capacity,
+    price: Number(row.price),
+    description: row.description || "No description provided.",
+  };
+}
+
+function EventCard({ event }: { event: EventItem }) {
+  const spotsLeft = event.capacity - (event.capacity - event.spots);
+  const isFull = spotsLeft === 0;
+
+  return (
+    <Card>
+      <div className="space-y-2">
+        <div className="flex justify-between items-start">
+          <div>
+            <h3 className="font-serif text-lg font-bold text-[color:var(--wasatch-blue)]">{event.title}</h3>
+            <p className="text-sm text-[color:var(--wasatch-gray)]">{event.type}</p>
+          </div>
+          <span className={`text-sm font-semibold px-2 py-1 rounded ${isFull ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}>
+            {isFull ? "Full" : `${spotsLeft} spots`}
+          </span>
+        </div>
+        <p className="text-sm text-[color:var(--wasatch-gray)]">{event.date} at {event.time}</p>
+        <p className="text-sm text-[color:var(--wasatch-gray)]">${event.price.toFixed(2)}</p>
+      </div>
+    </Card>
+  );
+}
 
 export default function Home() {
+  const [upcomingEvents, setUpcomingEvents] = useState<EventItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadEvents() {
+      const midnight = new Date();
+      midnight.setHours(0, 0, 0, 0);
+
+      const { data, error } = await supabase
+        .from("events")
+        .select("id, name, description, event_date, event_type, price, capacity, spots_remaining, spots_available")
+        .gte("event_date", midnight.toISOString())
+        .order("event_date", { ascending: true })
+        .limit(3);
+
+      if (!error && data) {
+        setUpcomingEvents(data.map(toUiEvent));
+      }
+      setLoading(false);
+    }
+
+    loadEvents();
+  }, []);
+
   return (
     <div className="min-h-screen bg-[color:var(--wasatch-bg1)]">
       {/* Hero Section */}
@@ -19,19 +110,38 @@ export default function Home() {
       {/* Upcoming Events Section */}
       <section className="w-full max-w-5xl mx-auto py-12 px-4">
         <h2 className="font-serif text-2xl md:text-3xl font-bold text-[color:var(--wasatch-blue)] mb-8 text-center">Upcoming Events</h2>
-        <Card>
-          <div className="text-center space-y-3">
-            <p className="font-sans text-base text-[color:var(--wasatch-gray)]">
-              New classes and open play nights are added regularly.
-            </p>
-            <p className="font-sans text-base text-[color:var(--wasatch-gray)]">
-              Visit the Events page to see the latest schedule and reserve your spot.
-            </p>
-            <Link href="/events" className="inline-block">
-              <Button variant="secondary">See Upcoming Events</Button>
-            </Link>
+        {loading ? (
+          <Card>
+            <div className="text-center py-8">
+              <p className="text-[color:var(--wasatch-gray)]">Loading events...</p>
+            </div>
+          </Card>
+        ) : upcomingEvents.length > 0 ? (
+          <div className="space-y-4">
+            {upcomingEvents.map((event) => (
+              <EventCard key={event.id} event={event} />
+            ))}
+            <div className="text-center pt-4">
+              <Link href="/events">
+                <Button variant="secondary">See All Events</Button>
+              </Link>
+            </div>
           </div>
-        </Card>
+        ) : (
+          <Card>
+            <div className="text-center space-y-3">
+              <p className="font-sans text-base text-[color:var(--wasatch-gray)]">
+                No upcoming events scheduled at this time.
+              </p>
+              <p className="font-sans text-base text-[color:var(--wasatch-gray)]">
+                Check back soon or visit the Events page for more information.
+              </p>
+              <Link href="/events" className="inline-block">
+                <Button variant="secondary">View Events</Button>
+              </Link>
+            </div>
+          </Card>
+        )}
       </section>
       {/* Who We Are Section */}
       <section className="w-full max-w-3xl mx-auto py-12 px-4 text-center">

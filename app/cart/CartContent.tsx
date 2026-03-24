@@ -39,6 +39,7 @@ type CheckoutOrderRow = {
         id: string;
         full_name: string;
         email: string | null;
+        phone: string | null;
         is_buyer: boolean;
       }>
     | null;
@@ -184,7 +185,7 @@ export default function CartContent() {
         const loadedAttendees = (existingOrder.checkout_order_attendees || []).map((attendee) => ({
           id: attendee.id,
           full_name: attendee.full_name,
-          phone: (attendee as any).phone || "",
+          phone: attendee.phone || "",
           email: attendee.email || "",
           is_buyer: attendee.is_buyer,
         }));
@@ -251,7 +252,7 @@ export default function CartContent() {
           id: createdAttendee.id,
           full_name: createdAttendee.full_name,
           email: createdAttendee.email || "",
-          phone: (createdAttendee as any).phone || "",
+          phone: createdAttendee.phone || "",
           is_buyer: createdAttendee.is_buyer,
         },
       ]);

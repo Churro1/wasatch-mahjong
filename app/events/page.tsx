@@ -68,9 +68,13 @@ export default function EventsPage() {
 
   useEffect(() => {
     async function loadEvents() {
+      const midnight = new Date();
+      midnight.setHours(0, 0, 0, 0);
+
       const { data, error } = await supabase
         .from("events")
         .select("id, name, description, event_date, event_type, price, capacity, spots_remaining, spots_available")
+        .gte("event_date", midnight.toISOString())
         .order("event_date", { ascending: true });
 
       if (!error && data) {

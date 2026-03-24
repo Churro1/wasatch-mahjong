@@ -26,10 +26,14 @@ export default function EventDetailPage() {
 
   useEffect(() => {
     async function loadEvent() {
+      const midnight = new Date();
+      midnight.setHours(0, 0, 0, 0);
+
       const { data } = await supabase
         .from("events")
         .select("id, name, description, event_date, event_type, price, spots_remaining, spots_available")
         .eq("id", id)
+        .gte("event_date", midnight.toISOString())
         .single();
 
       if (!data) {
