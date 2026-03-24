@@ -23,6 +23,8 @@ export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [event, setEvent] = useState<EventDetailItem | null>(null);
   const [loading, setLoading] = useState(true);
+  const [userIsSignedUp, setUserIsSignedUp] = useState(false);
+  const [userOnWaitlist, setUserOnWaitlist] = useState(false);
 
   useEffect(() => {
     async function loadEvent() {
@@ -60,6 +62,38 @@ export default function EventDetailPage() {
         description: data.description || "No description provided.",
       });
 
+      // Check if user is already signed up
+      const {
+        data: { user: currentUser },
+      } = await supabase.auth.getUser();
+
+      if (currentUser) {
+        // Check for active signups by this user for this event
+        const { data: existingSignups } = await supabase
+          .from("signups")
+          .select("id")
+          .eq("user_id", currentUser.id)
+          .eq("event_id", id)
+          .eq("signup_status", "active")
+          .limit(1);
+
+        if (existingSignups && existingSignups.length > 0) {
+          setUserIsSignedUp(true);
+        }
+
+        // Check if user is on waitlist
+        const { data: waitlistStatus } = await supabase
+          .from("waitlist_entries")
+          .select("id, status")
+          .eq("event_id", id)
+          .eq("email", currentUser.email || "")
+          .in("status", ["queued", "offered"])
+          .limit(1);
+
+        if (waitlistStatus && waitlistStatus.length > 0) {
+          setUserOnWaitlist(true);
+        }
+      }
       setLoading(false);
     }
 
@@ -91,15 +125,31 @@ export default function EventDetailPage() {
           <span className="text-[color:var(--wasatch-gray)]">${event.price}</span>
         </div>
 
-        {event.spots > 0 ? (
+        {userIsSignedUp ? (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+            <p className="text-blue-800 font-medium">You are already signed up for this event.</p>
+            <p className="text-blue-700 text-sm mt-1">View your booking in your dashboard.</p>
+          </div>
+        ) : null}
+
+        {userOnWaitlist ? (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+            <p className="text-amber-800 font-medium">You are on the waitlist for this event.</p>
+            <p className="text-amber-700 text-sm mt-1">You will receive an email if a spot opens.</p>
+          </div>
+        ) : null}
+
+        {!userIsSignedUp && event.spots > 0 ? (
           <Link href={`/cart?eventId=${event.id}`}>
             <Button variant="secondary">Sign Up</Button>
           </Link>
-        ) : (
+        ) : null}
+
+        {!userIsSignedUp && !userOnWaitlist && event.spots <= 0 ? (
           <Link href={`/waitlist?eventId=${event.id}`}>
             <Button variant="outline">Join Waitlist</Button>
           </Link>
-        )}
+        ) : null}
       </Card>
     </main>
   );

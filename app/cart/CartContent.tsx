@@ -161,6 +161,22 @@ export default function CartContent() {
 
       setEvent(normalizedEvent);
 
+        // Check if user is already signed up for this event
+        const { data: existingSignups, error: signupCheckError } = await supabase
+          .from("signups")
+          .select("id")
+          .eq("user_id", currentUser.id)
+          .eq("event_id", eventId)
+          .eq("signup_status", "active")
+          .limit(1);
+
+        if (!signupCheckError && existingSignups && existingSignups.length > 0) {
+          setError("You are already signed up for this event. View your booking in the dashboard.");
+          setEvent(normalizedEvent);
+          setLoading(false);
+          return;
+        }
+
       const { data: orderData, error: orderError } = await supabase
         .from("checkout_orders")
         .select(
@@ -567,7 +583,13 @@ export default function CartContent() {
                 ))}
               </div>
 
-              <div className="flex flex-wrap gap-3 mt-4">
+                <div className="rounded-2xl bg-blue-50 border border-blue-200 p-3 mt-4 mb-4">
+                  <p className="text-sm text-blue-900">
+                    <strong>Important:</strong> Only the buyer (person making payment) needs to provide a phone number. Additional attendees can be listed without contact information.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-3">
                 <Button
                   variant="outline"
                   onClick={handleAddAttendee}

@@ -26,6 +26,8 @@ export default function WaitlistContent() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
+  const [userEmail, setUserEmail] = useState("");
+  const [alreadyOnWaitlist, setAlreadyOnWaitlist] = useState(false);
 
   useEffect(() => {
     async function loadEvent() {
@@ -33,6 +35,29 @@ export default function WaitlistContent() {
         setError("Missing event selection.");
         setLoading(false);
         return;
+      }
+
+      // Get current user email and check if already on waitlist
+      const {
+        data: { user: currentUser },
+      } = await supabase.auth.getUser();
+
+      if (currentUser?.email) {
+        setUserEmail(currentUser.email);
+        setEmail(currentUser.email);
+
+        // Check if already on waitlist
+        const { data: waitlistCheck } = await supabase
+          .from("waitlist_entries")
+          .select("id, status")
+          .eq("event_id", eventId)
+          .eq("email", currentUser.email)
+          .in("status", ["queued", "offered"])
+          .limit(1);
+
+        if (waitlistCheck && waitlistCheck.length > 0) {
+          setAlreadyOnWaitlist(true);
+        }
       }
 
       const { data, error: eventError } = await supabase
@@ -62,6 +87,11 @@ export default function WaitlistContent() {
       return;
     }
 
+    if (alreadyOnWaitlist) {
+      setError("You are already on the waitlist for this event at " + email);
+      return;
+    }
+
     setSubmitting(true);
     setError("");
     setStatus("");
@@ -86,7 +116,7 @@ export default function WaitlistContent() {
       return;
     }
 
-    setStatus(payload.message || "You are on the waitlist.");
+    setStatus(payload.message || "You are on the waitlist. Check your email for next steps.");
     setSubmitting(false);
   };
 
@@ -94,49 +124,73 @@ export default function WaitlistContent() {
     <main className="min-h-screen bg-[color:var(--wasatch-bg1)] px-4 py-12">
       <div className="max-w-2xl mx-auto">
         <Card>
-          <h1 className="font-serif text-3xl font-bold text-[color:var(--wasatch-blue)] mb-4">Join Waitlist</h1>
+          <h1 className="font-serif text-3xl font-bold text-[color:var(--wasatch-blue)] mb-4">Join Event Waitlist</h1>
 
           {loading ? <p className="text-[color:var(--wasatch-gray)]">Loading event...</p> : null}
 
           {!loading && event ? (
-            <div className="mb-6 text-[color:var(--wasatch-gray)]">
-              <p className="font-semibold text-[color:var(--wasatch-red)]">{event.name}</p>
-              <p>{format(parseISO(event.event_date), "MMMM d, yyyy 'at' h:mm a")}</p>
-              <p className="text-sm mt-2">
-                If a spot opens, we will email you a private signup link. You will have 24 hours to claim it.
+            <div className="mb-6 space-y-3 text-[color:var(--wasatch-gray)]">
+              <div>
+                <p className="font-semibold text-[color:var(--wasatch-red)]">{event.name}</p>
+                <p>{format(parseISO(event.event_date), "MMMM d, yyyy 'at' h:mm a")}</p>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-sm text-blue-900 font-semibold">How the waitlist works:</p>
+                <ul className="text-sm text-blue-900 mt-2 space-y-1">
+                  <li>✓ When a spot becomes available, you'll get an email</li>
+                  <li>✓ You'll have 24 hours to claim your spot with a private link</li>
+                  <li>✓ Complete your payment to confirm your registration</li>
+                </ul>
+              </div>
+            </div>
+          ) : null}
+
+          {alreadyOnWaitlist ? (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+              <p className="font-medium text-amber-800">You are already on the waitlist</p>
+              <p className="text-sm text-amber-700 mt-1">
+                We'll email you at <strong>{userEmail}</strong> if a spot opens. Check your inbox and spam folder for our emails.
               </p>
             </div>
           ) : null}
 
-          {error ? <p className="text-sm text-[color:var(--wasatch-red)] mb-4">{error}</p> : null}
-          {status ? <p className="text-sm text-[color:var(--wasatch-blue)] mb-4">{status}</p> : null}
+          {error ? <p className="text-sm text-[color:var(--wasatch-red)] mb-4 font-medium">{error}</p> : null}
+          {status ? <p className="text-sm text-[color:var(--wasatch-blue)] mb-4 font-medium">{status}</p> : null}
 
-          <form className="space-y-4" onSubmit={handleSubmit}>
-            <div>
-              <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Name (optional)</label>
-              <input
-                type="text"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2"
-              />
-            </div>
+          {!alreadyOnWaitlist ? (
+            <form className="space-y-4" onSubmit={handleSubmit}>
+              <div>
+                <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Name</label>
+                <input
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2"
+                  placeholder="Your full name"
+                />
+              </div>
 
-            <div>
-              <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2"
-                required
-              />
-            </div>
+              <div>
+                <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Email Address</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2"
+                  placeholder="your@email.com"
+                  required
+                />
+                <p className="text-xs text-[color:var(--wasatch-gray)] mt-1">
+                  We'll send spot availability notifications to this email
+                </p>
+              </div>
 
-            <Button type="submit" variant="primary" className="w-full" disabled={submitting || !eventId || !event}>
-              {submitting ? "Joining..." : "Join Waitlist"}
-            </Button>
-          </form>
+              <Button type="submit" variant="primary" className="w-full" disabled={submitting || !eventId || !event}>
+                {submitting ? "Joining..." : "Join Waitlist"}
+              </Button>
+            </form>
+          ) : null}
 
           <div className="pt-4">
             <Link href="/events">

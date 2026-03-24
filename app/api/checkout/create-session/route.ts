@@ -226,6 +226,26 @@ export async function POST(req: NextRequest) {
   const userEmail = normalizeEmail(user.email);
   const nowIso = new Date().toISOString();
 
+    // Check if buyer user has already signed up for this event
+    const { data: existingSignups, error: checkSignupError } = await supabaseAdmin
+      .from("signups")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("event_id", order.event_id)
+      .eq("signup_status", "active")
+      .limit(1);
+
+    if (checkSignupError) {
+      return NextResponse.json({ error: checkSignupError.message }, { status: 500 });
+    }
+
+    if (existingSignups && existingSignups.length > 0) {
+      return NextResponse.json(
+        { error: "You are already registered for this event. Check your dashboard if you need to make changes." },
+        { status: 409 }
+      );
+    }
+
   try {
     await dispatchWaitlistOffersForEvent({
       supabaseAdmin,
