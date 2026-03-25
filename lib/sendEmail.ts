@@ -1,16 +1,21 @@
 import nodemailer from "nodemailer";
 import { requireEnv } from "@/lib/env";
 
-const gmailUser = requireEnv("GMAIL_USER");
-const gmailPass = requireEnv("GMAIL_PASS");
+function getTransportConfig() {
+  const gmailUser = requireEnv("GMAIL_USER");
+  const gmailPass = requireEnv("GMAIL_PASS");
 
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: gmailUser,
-    pass: gmailPass,
-  },
-});
+  return {
+    gmailUser,
+    transporter: nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: gmailUser,
+        pass: gmailPass,
+      },
+    }),
+  };
+}
 
 export async function sendEmail({
   to,
@@ -21,11 +26,14 @@ export async function sendEmail({
   subject: string;
   html: string;
 }) {
+  const { gmailUser, transporter } = getTransportConfig();
+
   const mailOptions = {
     from: gmailUser,
     to,
     subject,
     html,
   };
+
   return transporter.sendMail(mailOptions);
 }

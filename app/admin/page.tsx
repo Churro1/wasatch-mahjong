@@ -124,6 +124,9 @@ export default function AdminPage() {
   const [adminUserIdInput, setAdminUserIdInput] = useState("");
   const [adminStatus, setAdminStatus] = useState("");
   const [adminSaving, setAdminSaving] = useState(false);
+  const [testEmailTo, setTestEmailTo] = useState("");
+  const [testEmailStatus, setTestEmailStatus] = useState("");
+  const [sendingTestEmail, setSendingTestEmail] = useState(false);
 
   const [events, setEvents] = useState<ManagedEvent[]>([]);
   const [eventsStatus, setEventsStatus] = useState("");
@@ -255,6 +258,7 @@ export default function AdminPage() {
       }
 
       setUser(currentUser);
+      setTestEmailTo(currentUser.email || "");
 
       const { data: adminCheck, error: adminCheckError } = await supabase
         .from("admin_users")
@@ -335,6 +339,50 @@ export default function AdminPage() {
     );
     await loadAdminUsers();
     setAdminSaving(false);
+  };
+
+  const handleSendTestEmail = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    const to = testEmailTo.trim();
+    if (!to) {
+      setTestEmailStatus("Enter an email address to test delivery.");
+      return;
+    }
+
+    setSendingTestEmail(true);
+    setTestEmailStatus("");
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const accessToken = session?.access_token;
+
+    if (!accessToken) {
+      setTestEmailStatus("Your session expired. Please sign in again.");
+      setSendingTestEmail(false);
+      return;
+    }
+
+    const response = await fetch("/api/admin/test-email", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ to }),
+    });
+
+    const payload = await response.json();
+
+    if (!response.ok) {
+      setTestEmailStatus(payload.details ? `${payload.error} ${payload.details}` : payload.error || "Test email failed.");
+      setSendingTestEmail(false);
+      return;
+    }
+
+    setTestEmailStatus(payload.message || "Test email sent.");
+    setSendingTestEmail(false);
   };
 
   const openCreateModal = () => {
@@ -1220,6 +1268,30 @@ export default function AdminPage() {
           <p className="text-[color:var(--wasatch-gray)] text-sm mb-4">
             Add another admin by email or user UUID. This section sits below the event tools on purpose.
           </p>
+
+          <div className="rounded-2xl border border-[color:var(--wasatch-gray)]/30 bg-white p-4 mb-5">
+            <h3 className="font-serif text-lg font-bold text-[color:var(--wasatch-blue)] mb-2">Email Test</h3>
+            <p className="text-sm text-[color:var(--wasatch-gray)] mb-3">
+              Send a test email to confirm outbound delivery and credentials.
+            </p>
+
+            <form onSubmit={handleSendTestEmail} className="space-y-3 max-w-2xl">
+              <label className="block text-sm font-medium text-[color:var(--wasatch-gray)]">Recipient Email</label>
+              <input
+                type="email"
+                value={testEmailTo}
+                onChange={(e) => setTestEmailTo(e.target.value)}
+                className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[color:var(--wasatch-blue)]"
+                placeholder="you@example.com"
+                required
+              />
+              <Button type="submit" variant="secondary" disabled={sendingTestEmail}>
+                {sendingTestEmail ? "Sending..." : "Send Test Email"}
+              </Button>
+            </form>
+
+            {testEmailStatus ? <p className="text-sm text-[color:var(--wasatch-blue)] mt-3">{testEmailStatus}</p> : null}
+          </div>
 
           <form onSubmit={handleAddAdmin} className="space-y-3 mb-4 max-w-2xl">
             <label className="block text-sm font-medium text-[color:var(--wasatch-gray)]">Add Admin by Email or UUID</label>
