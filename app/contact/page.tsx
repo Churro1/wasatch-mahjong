@@ -80,8 +80,9 @@ export default function ContactPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Name</label>
+              <label htmlFor="contact-name" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Name</label>
               <input
+                id="contact-name"
                 name="name"
                 type="text"
                 value={name}
@@ -92,8 +93,9 @@ export default function ContactPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Email</label>
+              <label htmlFor="contact-email" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Email</label>
               <input
+                id="contact-email"
                 name="email"
                 type="email"
                 value={email}
@@ -104,8 +106,9 @@ export default function ContactPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Message</label>
+              <label htmlFor="contact-message" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Message</label>
               <textarea
+                id="contact-message"
                 name="message"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}

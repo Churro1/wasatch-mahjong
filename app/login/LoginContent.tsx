@@ -61,8 +61,9 @@ export default function LoginContent() {
 
         <form onSubmit={handleAuth} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Email</label>
+            <label htmlFor="auth-email" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Email</label>
             <input
+              id="auth-email"
               name="email"
               type="email"
               value={email}
@@ -73,8 +74,9 @@ export default function LoginContent() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Password</label>
+            <label htmlFor="auth-password" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Password</label>
             <input
+              id="auth-password"
               name="password"
               type="password"
               value={password}

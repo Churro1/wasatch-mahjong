@@ -293,8 +293,9 @@ export default function DashboardPage() {
             <h2 className="font-serif text-2xl font-bold text-[color:var(--wasatch-red)] mb-4">Profile</h2>
             <form onSubmit={handleSaveProfile} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Name</label>
+                <label htmlFor="profile-name" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Name</label>
                 <input
+                  id="profile-name"
                   name="name"
                   type="text"
                   value={name}
@@ -305,8 +306,9 @@ export default function DashboardPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Email</label>
+                <label htmlFor="profile-email" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Email</label>
                 <input
+                  id="profile-email"
                   name="email"
                   type="email"
                   value={email}

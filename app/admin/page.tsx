@@ -972,8 +972,9 @@ export default function AdminPage() {
 
             <form onSubmit={handleSavePreset} className="space-y-3 mb-4">
               <div>
-                <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Preset Name</label>
+                <label htmlFor="preset-name" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Preset Name</label>
                 <input
+                  id="preset-name"
                   name="presetName"
                   type="text"
                   value={presetName}
@@ -985,8 +986,9 @@ export default function AdminPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Type</label>
+                <label htmlFor="preset-type" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Type</label>
                 <select
+                  id="preset-type"
                   name="presetType"
                   value={presetType}
                   onChange={(e) => setPresetType(e.target.value as EventTypeValue)}
@@ -999,8 +1001,9 @@ export default function AdminPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Default Title</label>
+                <label htmlFor="preset-title" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Default Title</label>
                 <input
+                  id="preset-title"
                   name="presetTitle"
                   type="text"
                   value={presetTitle}
@@ -1011,8 +1014,9 @@ export default function AdminPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Default Description</label>
+                <label htmlFor="preset-description" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Default Description</label>
                 <textarea
+                  id="preset-description"
                   name="presetDescription"
                   value={presetDescription}
                   onChange={(e) => setPresetDescription(e.target.value)}
@@ -1023,8 +1027,9 @@ export default function AdminPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Default Price</label>
+                  <label htmlFor="preset-price" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Default Price</label>
                   <input
+                    id="preset-price"
                     name="presetPrice"
                     type="number"
                     min={0}
@@ -1037,8 +1042,9 @@ export default function AdminPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Default Capacity</label>
+                  <label htmlFor="preset-capacity" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Default Capacity</label>
                   <input
+                    id="preset-capacity"
                     name="presetCapacity"
                     type="number"
                     min={1}
@@ -1166,8 +1172,9 @@ export default function AdminPage() {
                       <>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div className="md:col-span-2">
-                            <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Class Name</label>
+                            <label htmlFor="edit-name" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Class Name</label>
                             <input
+                              id="edit-name"
                               name="editName"
                               type="text"
                               value={editName}
@@ -1177,8 +1184,9 @@ export default function AdminPage() {
                           </div>
 
                           <div className="md:col-span-2">
-                            <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Description</label>
+                            <label htmlFor="edit-description" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Description</label>
                             <textarea
+                              id="edit-description"
                               name="editDescription"
                               value={editDescription}
                               onChange={(e) => setEditDescription(e.target.value)}
@@ -1188,8 +1196,9 @@ export default function AdminPage() {
                           </div>
 
                           <div>
-                            <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Date</label>
+                            <label htmlFor="edit-date" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Date</label>
                             <input
+                              id="edit-date"
                               name="editDate"
                               type="date"
                               value={editDate}
@@ -1199,8 +1208,9 @@ export default function AdminPage() {
                           </div>
 
                           <div>
-                            <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Time</label>
+                            <label htmlFor="edit-time" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Time</label>
                             <input
+                              id="edit-time"
                               name="editTime"
                               type="time"
                               value={editTime}
@@ -1210,8 +1220,9 @@ export default function AdminPage() {
                           </div>
 
                           <div>
-                            <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Event Type</label>
+                            <label htmlFor="edit-type" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Event Type</label>
                             <input
+                              id="edit-type"
                               name="editType"
                               type="text"
                               value={toEventTypeLabel(editType)}
@@ -1221,8 +1232,9 @@ export default function AdminPage() {
                           </div>
 
                           <div>
-                            <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Cost ($)</label>
+                            <label htmlFor="edit-price" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Cost ($)</label>
                             <input
+                              id="edit-price"
                               name="editPrice"
                               type="number"
                               min={0}
@@ -1234,8 +1246,9 @@ export default function AdminPage() {
                           </div>
 
                           <div>
-                            <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Capacity</label>
+                            <label htmlFor="edit-capacity" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Capacity</label>
                             <input
+                              id="edit-capacity"
                               name="editCapacity"
                               type="number"
                               min={1}
@@ -1247,8 +1260,9 @@ export default function AdminPage() {
                           </div>
 
                           <div>
-                            <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Spots Remaining</label>
+                            <label htmlFor="edit-spots" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Spots Remaining</label>
                             <input
+                              id="edit-spots"
                               name="editSpots"
                               type="number"
                               min={0}
@@ -1290,8 +1304,9 @@ export default function AdminPage() {
             </p>
 
             <form onSubmit={handleSendTestEmail} className="space-y-3 max-w-2xl">
-              <label className="block text-sm font-medium text-[color:var(--wasatch-gray)]">Recipient Email</label>
+              <label htmlFor="test-email-to" className="block text-sm font-medium text-[color:var(--wasatch-gray)]">Recipient Email</label>
               <input
+                id="test-email-to"
                 name="testEmailTo"
                 type="email"
                 value={testEmailTo}
@@ -1309,8 +1324,9 @@ export default function AdminPage() {
           </div>
 
           <form onSubmit={handleAddAdmin} className="space-y-3 mb-4 max-w-2xl">
-            <label className="block text-sm font-medium text-[color:var(--wasatch-gray)]">Add Admin by Email or UUID</label>
+            <label htmlFor="admin-identifier" className="block text-sm font-medium text-[color:var(--wasatch-gray)]">Add Admin by Email or UUID</label>
             <input
+              id="admin-identifier"
               name="adminIdentifier"
               type="text"
               value={adminUserIdInput}
@@ -1371,8 +1387,9 @@ export default function AdminPage() {
                   </p>
 
                   <div className="mb-4">
-                    <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Load Preset</label>
+                    <label htmlFor="create-selected-preset" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Load Preset</label>
                     <select
+                      id="create-selected-preset"
                       name="selectedPresetId"
                       value={selectedPresetId}
                       onChange={(e) => handleLoadPreset(e.target.value)}
@@ -1389,8 +1406,9 @@ export default function AdminPage() {
 
                   <form onSubmit={handleCreateEvent} className="space-y-3">
                     <div>
-                      <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Title</label>
+                      <label htmlFor="create-title" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Title</label>
                       <input
+                        id="create-title"
                         name="createTitle"
                         type="text"
                         value={createForm.title}
@@ -1401,8 +1419,9 @@ export default function AdminPage() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Description</label>
+                      <label htmlFor="create-description" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Description</label>
                       <textarea
+                        id="create-description"
                         name="createDescription"
                         value={createForm.description}
                         onChange={(e) => setCreateForm((prev) => ({ ...prev, description: e.target.value }))}
@@ -1413,8 +1432,9 @@ export default function AdminPage() {
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Date</label>
+                        <label htmlFor="create-date" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Date</label>
                         <input
+                          id="create-date"
                           name="createDate"
                           type="date"
                           value={createForm.date}
@@ -1425,8 +1445,9 @@ export default function AdminPage() {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Time</label>
+                        <label htmlFor="create-time" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Time</label>
                         <input
+                          id="create-time"
                           name="createTime"
                           type="time"
                           value={createForm.time}
@@ -1439,8 +1460,9 @@ export default function AdminPage() {
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Cost ($)</label>
+                        <label htmlFor="create-cost" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Cost ($)</label>
                         <input
+                          id="create-cost"
                           name="createCost"
                           type="number"
                           min={0}
@@ -1453,8 +1475,9 @@ export default function AdminPage() {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Spots Available</label>
+                        <label htmlFor="create-spots" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Spots Available</label>
                         <input
+                          id="create-spots"
                           name="createSpotsAvailable"
                           type="number"
                           min={1}
@@ -1489,8 +1512,9 @@ export default function AdminPage() {
                       {isRepeating ? (
                         <>
                           <div>
-                            <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Series Name (optional)</label>
+                            <label htmlFor="repeat-series-name" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Series Name (optional)</label>
                             <input
+                              id="repeat-series-name"
                               name="repeatSeriesName"
                               type="text"
                               value={repeatSeriesName}
@@ -1501,8 +1525,9 @@ export default function AdminPage() {
                           </div>
 
                           <div>
-                            <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Repeat Pattern</label>
+                            <label htmlFor="repeat-pattern" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Repeat Pattern</label>
                             <select
+                              id="repeat-pattern"
                               name="repeatPattern"
                               value={repeatPattern}
                               onChange={(e) => {
@@ -1529,8 +1554,9 @@ export default function AdminPage() {
                           {repeatPattern === "custom" ? (
                             <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Custom Unit</label>
+                                <label htmlFor="repeat-custom-unit" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Custom Unit</label>
                                 <select
+                                  id="repeat-custom-unit"
                                   name="repeatCustomUnit"
                                   value={repeatCustomUnit}
                                   onChange={(e) => setRepeatCustomUnit(e.target.value as RecurrenceUnit)}
@@ -1542,8 +1568,9 @@ export default function AdminPage() {
                                 </select>
                               </div>
                               <div>
-                                <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Every N Units</label>
+                                <label htmlFor="repeat-custom-interval" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Every N Units</label>
                                 <input
+                                  id="repeat-custom-interval"
                                   name="repeatCustomInterval"
                                   type="number"
                                   min={1}
@@ -1558,7 +1585,7 @@ export default function AdminPage() {
 
                           {recurrenceNeedsWeekdays ? (
                             <div>
-                              <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Weekdays</label>
+                              <p className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Weekdays</p>
                               <div className="flex flex-wrap gap-2">
                                 {DAY_OPTIONS.map((day) => {
                                   const isSelected = repeatWeekdays.includes(day.value);
@@ -1582,8 +1609,9 @@ export default function AdminPage() {
                           ) : null}
 
                           <div>
-                            <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">End Condition</label>
+                            <label htmlFor="repeat-end-type" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">End Condition</label>
                             <select
+                              id="repeat-end-type"
                               name="repeatEndType"
                               value={repeatEndType}
                               onChange={(e) => setRepeatEndType(e.target.value as RepeatEndType)}
@@ -1596,8 +1624,9 @@ export default function AdminPage() {
 
                           {repeatEndType === "count" ? (
                             <div>
-                              <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Occurrences</label>
+                              <label htmlFor="repeat-count" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Occurrences</label>
                               <input
+                                id="repeat-count"
                                 name="repeatCount"
                                 type="number"
                                 min={1}
@@ -1609,8 +1638,9 @@ export default function AdminPage() {
                             </div>
                           ) : (
                             <div>
-                              <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">End Date</label>
+                              <label htmlFor="repeat-until-date" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">End Date</label>
                               <input
+                                id="repeat-until-date"
                                 name="repeatUntilDate"
                                 type="date"
                                 value={repeatUntilDate}

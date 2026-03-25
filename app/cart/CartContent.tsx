@@ -544,8 +544,9 @@ export default function CartContent() {
 
                     <div className="space-y-3">
                       <div>
-                        <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Full Name</label>
+                        <label htmlFor={`attendee-${index}-full-name`} className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Full Name</label>
                         <input
+                          id={`attendee-${index}-full-name`}
                           name={`attendee-${index}-full-name`}
                           type="text"
                           value={attendee.full_name}
@@ -556,8 +557,9 @@ export default function CartContent() {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Email (optional)</label>
+                        <label htmlFor={`attendee-${index}-email`} className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Email (optional)</label>
                         <input
+                          id={`attendee-${index}-email`}
                           name={`attendee-${index}-email`}
                           type="email"
                           value={attendee.email}
@@ -568,10 +570,11 @@ export default function CartContent() {
 
                       {attendee.is_buyer ? (
                         <div>
-                          <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">
+                          <label htmlFor={`attendee-${index}-phone`} className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">
                             Phone <span className="text-[color:var(--wasatch-red)]">*</span>
                           </label>
                           <input
+                            id={`attendee-${index}-phone`}
                             name={`attendee-${index}-phone`}
                             type="tel"
                             value={attendee.phone || ""}

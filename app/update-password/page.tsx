@@ -47,10 +47,11 @@ export default function UpdatePasswordPage() {
 
         <form onSubmit={handleUpdate} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">
+            <label htmlFor="update-password" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">
               New Password
             </label>
             <input
+              id="update-password"
               name="newPassword"
               type="password"
               value={password}
@@ -61,10 +62,11 @@ export default function UpdatePasswordPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">
+            <label htmlFor="update-confirm-password" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">
               Confirm New Password
             </label>
             <input
+              id="update-confirm-password"
               name="confirmPassword"
               type="password"
               value={confirmPassword}

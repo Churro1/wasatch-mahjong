@@ -161,8 +161,9 @@ export default function WaitlistContent() {
           {!alreadyOnWaitlist ? (
             <form className="space-y-4" onSubmit={handleSubmit}>
               <div>
-                <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Name</label>
+                <label htmlFor="waitlist-full-name" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Name</label>
                 <input
+                  id="waitlist-full-name"
                   name="fullName"
                   type="text"
                   value={fullName}
@@ -173,8 +174,9 @@ export default function WaitlistContent() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Email Address</label>
+                <label htmlFor="waitlist-email" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Email Address</label>
                 <input
+                  id="waitlist-email"
                   name="email"
                   type="email"
                   value={email}
