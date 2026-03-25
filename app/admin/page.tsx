@@ -373,7 +373,15 @@ export default function AdminPage() {
       body: JSON.stringify({ to }),
     });
 
-    const payload = await response.json();
+    const responseText = await response.text();
+    let payload: { message?: string; error?: string; details?: string } = {};
+    if (responseText) {
+      try {
+        payload = JSON.parse(responseText) as { message?: string; error?: string; details?: string };
+      } catch {
+        payload = { error: "Test email failed.", details: "Server returned a non-JSON response." };
+      }
+    }
 
     if (!response.ok) {
       setTestEmailStatus(payload.details ? `${payload.error} ${payload.details}` : payload.error || "Test email failed.");
@@ -850,22 +858,43 @@ export default function AdminPage() {
     setDeletingEventId(eventId);
     setEventsStatus("");
 
-    const { error } = await supabase
-      .from("events")
-      .delete()
-      .eq("id", eventId);
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const accessToken = session?.access_token;
 
-    if (error) {
-      if (error.message.toLowerCase().includes("has one or more signups")) {
-        setEventsStatus("Cannot delete this event because it has signups.");
-      } else {
-        setEventsStatus(error.message);
-      }
+    if (!accessToken) {
+      setEventsStatus("Your session expired. Please sign in again.");
       setDeletingEventId(null);
       return;
     }
 
-    setEventsStatus("Event deleted.");
+    const response = await fetch("/api/admin/delete-event", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ eventId }),
+    });
+
+    const responseText = await response.text();
+    let payload: { message?: string; error?: string } = {};
+    if (responseText) {
+      try {
+        payload = JSON.parse(responseText) as { message?: string; error?: string };
+      } catch {
+        payload = { error: "Unable to parse server response." };
+      }
+    }
+
+    if (!response.ok) {
+      setEventsStatus(payload.error || "Could not delete this event.");
+      setDeletingEventId(null);
+      return;
+    }
+
+    setEventsStatus(payload.message || "Event deleted.");
     await loadEvents();
     setDeletingEventId(null);
   };

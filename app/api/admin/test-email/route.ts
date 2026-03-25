@@ -52,6 +52,16 @@ export async function POST(req: NextRequest) {
   const payload = await req.json();
   const toEmail = typeof payload.to === "string" ? payload.to.trim() : "";
 
+  if (!process.env.GMAIL_USER || !process.env.GMAIL_PASS) {
+    return NextResponse.json(
+      {
+        error: "Test email failed.",
+        details: "Missing GMAIL_USER or GMAIL_PASS in deployment environment variables.",
+      },
+      { status: 500 }
+    );
+  }
+
   if (!toEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(toEmail)) {
     return NextResponse.json({ error: "Enter a valid recipient email." }, { status: 400 });
   }
