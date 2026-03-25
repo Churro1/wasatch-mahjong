@@ -8,14 +8,23 @@ function sanitizeErrorMessage(error: unknown): string {
   }
 
   const message = error.message || "Unknown email error.";
+  const lower = message.toLowerCase();
 
   // Avoid echoing secrets while still giving useful diagnostics.
   if (message.includes("Missing required environment variable")) {
     return message;
   }
 
-  if (message.toLowerCase().includes("invalid login") || message.toLowerCase().includes("auth")) {
-    return "Email authentication failed. Verify GMAIL_USER and GMAIL_PASS (App Password).";
+  if (lower.includes("invalid login") || lower.includes("auth")) {
+    return "Email authentication failed. Verify SMTP_USER/SMTP_PASS (or GMAIL_USER/GMAIL_PASS App Password).";
+  }
+
+  if (lower.includes("enetunreach")) {
+    return "Network route to SMTP host failed (ENETUNREACH). This is commonly an IPv6 routing issue on the host. Use SMTP_HOST/SMTP_PORT with a reachable provider endpoint and redeploy.";
+  }
+
+  if (lower.includes("etimedout")) {
+    return "Connection to SMTP host timed out. Verify SMTP host/port and outbound network access from your deployment.";
   }
 
   return message;
@@ -52,11 +61,11 @@ export async function POST(req: NextRequest) {
   const payload = await req.json();
   const toEmail = typeof payload.to === "string" ? payload.to.trim() : "";
 
-  if (!process.env.GMAIL_USER || !process.env.GMAIL_PASS) {
+  if ((!process.env.SMTP_USER || !process.env.SMTP_PASS) && (!process.env.GMAIL_USER || !process.env.GMAIL_PASS)) {
     return NextResponse.json(
       {
         error: "Test email failed.",
-        details: "Missing GMAIL_USER or GMAIL_PASS in deployment environment variables.",
+        details: "Missing SMTP_USER/SMTP_PASS (or GMAIL_USER/GMAIL_PASS) in deployment environment variables.",
       },
       { status: 500 }
     );

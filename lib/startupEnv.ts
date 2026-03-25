@@ -4,8 +4,6 @@ const REQUIRED_PRODUCTION_ENV_VARS = [
   "SUPABASE_SERVICE_ROLE_KEY",
   "STRIPE_SECRET_KEY",
   "STRIPE_WEBHOOK_SECRET",
-  "GMAIL_USER",
-  "GMAIL_PASS",
 ];
 
 let hasValidatedStartupEnv = false;
@@ -27,7 +25,24 @@ export function validateStartupEnv() {
   });
 
   if (missing.length === 0) {
-    return;
+    const hasSmtpCredentials = Boolean(
+      process.env.SMTP_USER?.trim() && process.env.SMTP_PASS?.trim()
+    );
+    const hasGmailCredentials = Boolean(
+      process.env.GMAIL_USER?.trim() && process.env.GMAIL_PASS?.trim()
+    );
+
+    if (hasSmtpCredentials || hasGmailCredentials) {
+      return;
+    }
+
+    throw new Error(
+      [
+        "Missing required production email credentials:",
+        "- Set SMTP_USER and SMTP_PASS, or",
+        "- Set GMAIL_USER and GMAIL_PASS",
+      ].join("\n")
+    );
   }
 
   throw new Error(

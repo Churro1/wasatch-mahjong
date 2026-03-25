@@ -22,8 +22,11 @@ cp .env.example .env.local
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `NEXT_PUBLIC_SITE_URL` (your deployed app URL, e.g. `https://your-app.onrender.com`)
 - `SUPABASE_SERVICE_ROLE_KEY`
-- `GMAIL_USER`
-- `GMAIL_PASS`
+- `SMTP_USER` and `SMTP_PASS` (recommended), or `GMAIL_USER` and `GMAIL_PASS`
+- `SMTP_HOST` (optional, defaults to `smtp.gmail.com`)
+- `SMTP_PORT` (optional, defaults to `465` when secure)
+- `SMTP_SECURE` (optional, defaults to `true`)
+- `EMAIL_FROM` (optional sender address, defaults to SMTP/Gmail user)
 - `STRIPE_SECRET_KEY`
 - `STRIPE_PUBLISHABLE_KEY` (optional for future client-side Stripe UI)
 - `STRIPE_WEBHOOK_SECRET`
@@ -41,6 +44,12 @@ npm run dev
 - Never commit `.env.local`.
 - Keep all credentials in environment variables only.
 - If any secret is exposed, rotate it immediately in the provider console.
+
+## Email Delivery Notes
+
+- For production reliability, prefer dedicated SMTP credentials (`SMTP_USER`/`SMTP_PASS`) over personal mailbox credentials.
+- For Gmail, use an App Password (not your normal account password).
+- If you see `ENETUNREACH` in logs, verify deployment network egress and SMTP host/port settings.
 
 ## Stripe Checkout Setup
 
