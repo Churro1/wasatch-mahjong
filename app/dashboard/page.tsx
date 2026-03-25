@@ -295,6 +295,7 @@ export default function DashboardPage() {
               <div>
                 <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Name</label>
                 <input
+                  name="name"
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -306,6 +307,7 @@ export default function DashboardPage() {
               <div>
                 <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Email</label>
                 <input
+                  name="email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}

@@ -163,6 +163,7 @@ export default function WaitlistContent() {
               <div>
                 <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Name</label>
                 <input
+                  name="fullName"
                   type="text"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
@@ -174,6 +175,7 @@ export default function WaitlistContent() {
               <div>
                 <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Email Address</label>
                 <input
+                  name="email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}

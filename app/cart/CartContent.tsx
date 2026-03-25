@@ -546,6 +546,7 @@ export default function CartContent() {
                       <div>
                         <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Full Name</label>
                         <input
+                          name={`attendee-${index}-full-name`}
                           type="text"
                           value={attendee.full_name}
                           onChange={(e) => handleAttendeeChange(index, "full_name", e.target.value)}
@@ -557,6 +558,7 @@ export default function CartContent() {
                       <div>
                         <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Email (optional)</label>
                         <input
+                          name={`attendee-${index}-email`}
                           type="email"
                           value={attendee.email}
                           onChange={(e) => handleAttendeeChange(index, "email", e.target.value)}
@@ -570,6 +572,7 @@ export default function CartContent() {
                             Phone <span className="text-[color:var(--wasatch-red)]">*</span>
                           </label>
                           <input
+                            name={`attendee-${index}-phone`}
                             type="tel"
                             value={attendee.phone || ""}
                             onChange={(e) => handleAttendeeChange(index, "phone", e.target.value)}

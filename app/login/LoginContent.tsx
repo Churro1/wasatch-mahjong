@@ -63,6 +63,7 @@ export default function LoginContent() {
           <div>
             <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Email</label>
             <input
+              name="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -74,6 +75,7 @@ export default function LoginContent() {
           <div>
             <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Password</label>
             <input
+              name="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}

@@ -70,6 +70,7 @@ export default function ContactPage() {
               <label htmlFor="website-field">Website</label>
               <input
                 id="website-field"
+                name="website"
                 type="text"
                 autoComplete="off"
                 tabIndex={-1}
@@ -81,6 +82,7 @@ export default function ContactPage() {
             <div>
               <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Name</label>
               <input
+                name="name"
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -92,6 +94,7 @@ export default function ContactPage() {
             <div>
               <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Email</label>
               <input
+                name="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -103,6 +106,7 @@ export default function ContactPage() {
             <div>
               <label className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Message</label>
               <textarea
+                name="message"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 rows={5}

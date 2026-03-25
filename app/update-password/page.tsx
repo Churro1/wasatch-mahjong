@@ -51,6 +51,7 @@ export default function UpdatePasswordPage() {
               New Password
             </label>
             <input
+              name="newPassword"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -64,6 +65,7 @@ export default function UpdatePasswordPage() {
               Confirm New Password
             </label>
             <input
+              name="confirmPassword"
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
