@@ -22,11 +22,8 @@ cp .env.example .env.local
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `NEXT_PUBLIC_SITE_URL` (your deployed app URL, e.g. `https://your-app.onrender.com`)
 - `SUPABASE_SERVICE_ROLE_KEY`
-- `SMTP_USER` and `SMTP_PASS` (recommended), or `GMAIL_USER` and `GMAIL_PASS`
-- `SMTP_HOST` (optional, defaults to `smtp.gmail.com`)
-- `SMTP_PORT` (optional, defaults to `465` when secure)
-- `SMTP_SECURE` (optional, defaults to `true`)
-- `EMAIL_FROM` (optional sender address, defaults to SMTP/Gmail user)
+- `RESEND_API_KEY`
+- `EMAIL_FROM` (must be a verified sender/domain in Resend)
 - `STRIPE_SECRET_KEY`
 - `STRIPE_PUBLISHABLE_KEY` (optional for future client-side Stripe UI)
 - `STRIPE_WEBHOOK_SECRET`
@@ -47,9 +44,9 @@ npm run dev
 
 ## Email Delivery Notes
 
-- For production reliability, prefer dedicated SMTP credentials (`SMTP_USER`/`SMTP_PASS`) over personal mailbox credentials.
-- For Gmail, use an App Password (not your normal account password).
-- If you see `ENETUNREACH` in logs, verify deployment network egress and SMTP host/port settings.
+- The app sends email through Resend API.
+- `EMAIL_FROM` must be a sender/domain verified in your Resend account.
+- Use the Admin dashboard "Email Test" button after deploy to confirm delivery.
 
 ## Stripe Checkout Setup
 

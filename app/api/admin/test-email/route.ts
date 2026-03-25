@@ -16,15 +16,15 @@ function sanitizeErrorMessage(error: unknown): string {
   }
 
   if (lower.includes("invalid login") || lower.includes("auth")) {
-    return "Email authentication failed. Verify SMTP_USER/SMTP_PASS (or GMAIL_USER/GMAIL_PASS App Password).";
+    return "Email authentication failed. Verify RESEND_API_KEY.";
   }
 
-  if (lower.includes("enetunreach")) {
-    return "Network route to SMTP host failed (ENETUNREACH). This is commonly an IPv6 routing issue on the host. Use SMTP_HOST/SMTP_PORT with a reachable provider endpoint and redeploy.";
+  if (lower.includes("resend")) {
+    return "Resend API request failed. Verify RESEND_API_KEY and that EMAIL_FROM uses a verified sender/domain.";
   }
 
-  if (lower.includes("etimedout")) {
-    return "Connection to SMTP host timed out. Verify SMTP host/port and outbound network access from your deployment.";
+  if (lower.includes("abort") || lower.includes("timeout")) {
+    return "Request to Resend timed out. Check deployment egress/network and retry.";
   }
 
   return message;
@@ -61,11 +61,23 @@ export async function POST(req: NextRequest) {
   const payload = await req.json();
   const toEmail = typeof payload.to === "string" ? payload.to.trim() : "";
 
-  if ((!process.env.SMTP_USER || !process.env.SMTP_PASS) && (!process.env.GMAIL_USER || !process.env.GMAIL_PASS)) {
+  const hasResend = Boolean(process.env.RESEND_API_KEY?.trim());
+
+  if (!hasResend) {
     return NextResponse.json(
       {
         error: "Test email failed.",
-        details: "Missing SMTP_USER/SMTP_PASS (or GMAIL_USER/GMAIL_PASS) in deployment environment variables.",
+        details: "Missing RESEND_API_KEY in deployment environment variables.",
+      },
+      { status: 500 }
+    );
+  }
+
+  if (hasResend && !process.env.EMAIL_FROM?.trim()) {
+    return NextResponse.json(
+      {
+        error: "Test email failed.",
+        details: "EMAIL_FROM is required when using RESEND_API_KEY.",
       },
       { status: 500 }
     );
@@ -90,6 +102,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       message: `Test email sent to ${toEmail}.`,
+      provider: info.provider,
       messageId: info.messageId,
       accepted: info.accepted,
       rejected: info.rejected,

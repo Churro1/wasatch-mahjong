@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
   const safeEmail = escapeHtml(email);
   const safeMessage = escapeHtml(message).replace(/\n/g, "<br />");
 
-  const adminEmail = process.env.CONTACT_TO_EMAIL || process.env.GMAIL_USER;
+  const adminEmail = process.env.CONTACT_TO_EMAIL || process.env.EMAIL_FROM;
   if (!adminEmail) {
     return NextResponse.json({ error: "Admin email is not configured." }, { status: 500 });
   }

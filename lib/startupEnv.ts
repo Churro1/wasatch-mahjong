@@ -25,22 +25,17 @@ export function validateStartupEnv() {
   });
 
   if (missing.length === 0) {
-    const hasSmtpCredentials = Boolean(
-      process.env.SMTP_USER?.trim() && process.env.SMTP_PASS?.trim()
-    );
-    const hasGmailCredentials = Boolean(
-      process.env.GMAIL_USER?.trim() && process.env.GMAIL_PASS?.trim()
-    );
+    const hasResendCredentials = Boolean(process.env.RESEND_API_KEY?.trim());
 
-    if (hasSmtpCredentials || hasGmailCredentials) {
+    if (hasResendCredentials && Boolean(process.env.EMAIL_FROM?.trim())) {
       return;
     }
 
     throw new Error(
       [
         "Missing required production email credentials:",
-        "- Set SMTP_USER and SMTP_PASS, or",
-        "- Set GMAIL_USER and GMAIL_PASS",
+        "- Set RESEND_API_KEY",
+        "- Set EMAIL_FROM (verified sender/domain in Resend)",
       ].join("\n")
     );
   }

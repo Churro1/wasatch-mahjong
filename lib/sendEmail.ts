@@ -1,97 +1,63 @@
-import dns from "node:dns";
-import nodemailer from "nodemailer";
-import { requireAnyEnv } from "@/lib/env";
+import { requireEnv } from "@/lib/env";
 
-let hasSetDnsOrder = false;
-let cachedTransporter: nodemailer.Transporter | null = null;
-let cachedFromAddress = "";
+type SendEmailResult = {
+  messageId: string;
+  accepted: string[];
+  rejected: string[];
+  provider: "resend";
+};
 
-function parseBoolean(value: string | undefined, fallback: boolean) {
-  if (!value) {
-    return fallback;
-  }
+async function sendViaResend(params: {
+  apiKey: string;
+  from: string;
+  to: string;
+  subject: string;
+  html: string;
+}): Promise<SendEmailResult> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15_000);
 
-  const normalized = value.trim().toLowerCase();
-  if (normalized === "true" || normalized === "1" || normalized === "yes") {
-    return true;
-  }
-  if (normalized === "false" || normalized === "0" || normalized === "no") {
-    return false;
-  }
-  return fallback;
-}
-
-function parsePort(value: string | undefined, fallback: number) {
-  if (!value || value.trim().length === 0) {
-    return fallback;
-  }
-
-  const parsed = Number(value);
-  if (Number.isNaN(parsed) || parsed <= 0 || parsed > 65535) {
-    throw new Error("SMTP_PORT must be a valid port number between 1 and 65535.");
-  }
-  return parsed;
-}
-
-function setIpv4PreferredDnsOrder() {
-  if (hasSetDnsOrder) {
-    return;
-  }
-
-  hasSetDnsOrder = true;
-
-  // Render and other hosts can fail on IPv6-only resolution paths (ENETUNREACH).
+  let response: Response;
   try {
-    dns.setDefaultResultOrder("ipv4first");
-  } catch {
-    // Ignore when the Node runtime does not support changing DNS result order.
+    response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${params.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: params.from,
+        to: [params.to],
+        subject: params.subject,
+        html: params.html,
+      }),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
   }
-}
 
-function getTransportConfig() {
-  setIpv4PreferredDnsOrder();
+  const responseText = await response.text();
+  let payload: { id?: string; message?: string; error?: string } = {};
+  if (responseText) {
+    try {
+      payload = JSON.parse(responseText) as { id?: string; message?: string; error?: string };
+    } catch {
+      payload = { message: responseText };
+    }
+  }
 
-  const smtpUser = requireAnyEnv(["SMTP_USER", "GMAIL_USER"]);
-  const smtpPass = requireAnyEnv(["SMTP_PASS", "GMAIL_PASS"]);
-  const smtpHost = process.env.SMTP_HOST?.trim() || "smtp.gmail.com";
-  const smtpSecure = parseBoolean(process.env.SMTP_SECURE, true);
-  const smtpPort = parsePort(process.env.SMTP_PORT, smtpSecure ? 465 : 587);
-  const fromAddress = process.env.EMAIL_FROM?.trim() || smtpUser;
+  if (!response.ok) {
+    const details = payload.error || payload.message || "Unknown Resend API error.";
+    throw new Error(`Resend API request failed (${response.status}): ${details}`);
+  }
 
   return {
-    fromAddress,
-    transporter: nodemailer.createTransport({
-      host: smtpHost,
-      port: smtpPort,
-      secure: smtpSecure,
-      requireTLS: !smtpSecure,
-      pool: true,
-      maxConnections: 2,
-      maxMessages: 100,
-      connectionTimeout: 15_000,
-      greetingTimeout: 10_000,
-      socketTimeout: 20_000,
-      auth: {
-        user: smtpUser,
-        pass: smtpPass,
-      },
-      tls: {
-        minVersion: "TLSv1.2",
-        servername: smtpHost,
-      },
-    }),
+    messageId: payload.id || "",
+    accepted: [params.to],
+    rejected: [],
+    provider: "resend",
   };
-}
-
-function getTransporter() {
-  if (cachedTransporter) {
-    return { fromAddress: cachedFromAddress, transporter: cachedTransporter };
-  }
-
-  const config = getTransportConfig();
-  cachedTransporter = config.transporter;
-  cachedFromAddress = config.fromAddress;
-  return config;
 }
 
 export async function sendEmail({
@@ -102,15 +68,15 @@ export async function sendEmail({
   to: string;
   subject: string;
   html: string;
-}) {
-  const { fromAddress, transporter } = getTransporter();
+}): Promise<SendEmailResult> {
+  const apiKey = requireEnv("RESEND_API_KEY");
+  const fromAddress = requireEnv("EMAIL_FROM");
 
-  const mailOptions = {
+  return sendViaResend({
+    apiKey,
     from: fromAddress,
     to,
     subject,
     html,
-  };
-
-  return transporter.sendMail(mailOptions);
+  });
 }
