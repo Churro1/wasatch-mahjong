@@ -91,3 +91,14 @@ The waitlist feature sends a private 24-hour claim link when a spot opens.
 - Endpoint: `POST /api/waitlist/process`
 - Header required: `x-waitlist-secret: <WAITLIST_CRON_SECRET>`
 - Schedule this endpoint periodically (for example every 15 minutes) so expired offers advance to the next person in line.
+
+## Keep-Alive Ping
+
+If you are using Render's free tier, set up a second cron-job.org job to ping the site periodically. This can help keep the service warm, but it is not a guarantee that Render will never sleep the app.
+
+- URL: `https://www.wasatchmahjong.com/api/health`
+- Method: `GET`
+- Schedule: every 5 to 10 minutes
+- Headers: none required
+
+Use the health endpoint only for uptime/keep-alive checks. It does not touch Supabase, Stripe, or email systems.
