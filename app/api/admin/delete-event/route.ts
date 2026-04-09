@@ -54,6 +54,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Event not found." }, { status: 404 });
   }
 
+  const { count: orderCount, error: orderCountError } = await supabaseAdmin
+    .from("checkout_orders")
+    .select("id", { count: "exact", head: true })
+    .eq("event_id", normalizedEventId);
+
+  if (orderCountError) {
+    return NextResponse.json({ error: orderCountError.message }, { status: 500 });
+  }
+
   const { count: signupCount, error: signupCountError } = await supabaseAdmin
     .from("signups")
     .select("id", { count: "exact", head: true })
@@ -66,6 +75,13 @@ export async function POST(req: NextRequest) {
   if ((signupCount || 0) > 0) {
     return NextResponse.json(
       { error: "Cannot delete this event because it has one or more signups. Cancel attendee orders instead." },
+      { status: 409 }
+    );
+  }
+
+  if ((orderCount || 0) > 0) {
+    return NextResponse.json(
+      { error: "Cannot delete this event because it has checkout orders. Delete or cancel those orders first." },
       { status: 409 }
     );
   }
