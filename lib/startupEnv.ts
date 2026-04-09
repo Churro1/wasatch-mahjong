@@ -25,17 +25,29 @@ export function validateStartupEnv() {
   });
 
   if (missing.length === 0) {
-    const hasResendCredentials = Boolean(process.env.RESEND_API_KEY?.trim());
+    if (process.env.NEXT_PHASE === "phase-production-build") {
+      return;
+    }
 
-    if (hasResendCredentials && Boolean(process.env.EMAIL_FROM?.trim())) {
+    const hasSmtpHost = Boolean(process.env.SMTP_HOST?.trim());
+    const hasSmtpPort = Boolean(process.env.SMTP_PORT?.trim());
+    const hasSmtpUser = Boolean(process.env.SMTP_USER?.trim());
+    const hasSmtpPass = Boolean(process.env.SMTP_PASS?.trim());
+    const hasFromAddress = Boolean(process.env.EMAIL_FROM?.trim());
+
+    if (hasSmtpHost && hasSmtpPort && hasSmtpUser && hasSmtpPass && hasFromAddress) {
       return;
     }
 
     throw new Error(
       [
         "Missing required production email credentials:",
-        "- Set RESEND_API_KEY",
-        "- Set EMAIL_FROM (verified sender/domain in Resend)",
+        "- Set SMTP_HOST",
+        "- Set SMTP_PORT",
+        "- Set SMTP_USER",
+        "- Set SMTP_PASS",
+        "- Set EMAIL_FROM",
+        "- Optional: set SMTP_SECURE=true for implicit TLS (usually port 465)",
       ].join("\n")
     );
   }

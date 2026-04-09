@@ -1,62 +1,78 @@
 import { requireEnv } from "@/lib/env";
+import nodemailer from "nodemailer";
 
 type SendEmailResult = {
   messageId: string;
   accepted: string[];
   rejected: string[];
-  provider: "resend";
+  provider: "smtp";
 };
 
-async function sendViaResend(params: {
-  apiKey: string;
+let transporter: nodemailer.Transporter | null = null;
+
+function isSecureSmtp(port: number, secureEnv: string | undefined) {
+  if (typeof secureEnv === "string" && secureEnv.trim().length > 0) {
+    return secureEnv.trim().toLowerCase() === "true";
+  }
+
+  // Port 465 is implicit TLS by convention.
+  return port === 465;
+}
+
+function getTransporter() {
+  if (transporter) {
+    return transporter;
+  }
+
+  const host = requireEnv("SMTP_HOST");
+  const portValue = requireEnv("SMTP_PORT");
+  const user = requireEnv("SMTP_USER");
+  const pass = requireEnv("SMTP_PASS");
+  const port = Number.parseInt(portValue, 10);
+
+  if (Number.isNaN(port) || port <= 0) {
+    throw new Error("SMTP_PORT must be a valid positive integer.");
+  }
+
+  transporter = nodemailer.createTransport({
+    host,
+    port,
+    secure: isSecureSmtp(port, process.env.SMTP_SECURE),
+    auth: {
+      user,
+      pass,
+    },
+  });
+
+  return transporter;
+}
+
+async function sendViaSmtp(params: {
   from: string;
   to: string;
   subject: string;
   html: string;
 }): Promise<SendEmailResult> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15_000);
+  const smtp = getTransporter();
+  const info = await smtp.sendMail({
+    from: params.from,
+    to: params.to,
+    subject: params.subject,
+    html: params.html,
+  });
 
-  let response: Response;
-  try {
-    response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${params.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: params.from,
-        to: [params.to],
-        subject: params.subject,
-        html: params.html,
-      }),
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timeoutId);
-  }
-
-  const responseText = await response.text();
-  let payload: { id?: string; message?: string; error?: string } = {};
-  if (responseText) {
-    try {
-      payload = JSON.parse(responseText) as { id?: string; message?: string; error?: string };
-    } catch {
-      payload = { message: responseText };
-    }
-  }
-
-  if (!response.ok) {
-    const details = payload.error || payload.message || "Unknown Resend API error.";
-    throw new Error(`Resend API request failed (${response.status}): ${details}`);
-  }
+  const accepted = (info.accepted || []).map((value: string | { address: string }) =>
+    typeof value === "string" ? value : value.address
+  );
+  const rejected = (info.rejected || []).map((value: string | { address: string }) =>
+    typeof value === "string" ? value : value.address
+  );
 
   return {
-    messageId: payload.id || "",
-    accepted: [params.to],
-    rejected: [],
-    provider: "resend",
+    messageId: info.messageId || "",
+    accepted,
+    rejected,
+    provider: "smtp",
   };
 }
 
@@ -69,11 +85,9 @@ export async function sendEmail({
   subject: string;
   html: string;
 }): Promise<SendEmailResult> {
-  const apiKey = requireEnv("RESEND_API_KEY");
   const fromAddress = requireEnv("EMAIL_FROM");
 
-  return sendViaResend({
-    apiKey,
+  return sendViaSmtp({
     from: fromAddress,
     to,
     subject,

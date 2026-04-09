@@ -138,8 +138,8 @@ export default function WaitlistContent() {
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                 <p className="text-sm text-blue-900 font-semibold">How the waitlist works:</p>
                 <ul className="text-sm text-blue-900 mt-2 space-y-1">
-                  <li>✓ When a spot becomes available, you'll get an email</li>
-                  <li>✓ You'll have 24 hours to claim your spot with a private link</li>
+                  <li>✓ When a spot becomes available, you&apos;ll get an email</li>
+                  <li>✓ You&apos;ll have 24 hours to claim your spot with a private link</li>
                   <li>✓ Complete your payment to confirm your registration</li>
                 </ul>
               </div>
@@ -150,7 +150,7 @@ export default function WaitlistContent() {
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
               <p className="font-medium text-amber-800">You are already on the waitlist</p>
               <p className="text-sm text-amber-700 mt-1">
-                We'll email you at <strong>{userEmail}</strong> if a spot opens. Check your inbox and spam folder for our emails.
+                We&apos;ll email you at <strong>{userEmail}</strong> if a spot opens. Check your inbox and spam folder for our emails.
               </p>
             </div>
           ) : null}
@@ -186,7 +186,7 @@ export default function WaitlistContent() {
                   required
                 />
                 <p className="text-xs text-[color:var(--wasatch-gray)] mt-1">
-                  We'll send spot availability notifications to this email
+                  We&apos;ll send spot availability notifications to this email
                 </p>
               </div>
 

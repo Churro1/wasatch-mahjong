@@ -22,8 +22,12 @@ cp .env.example .env.local
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `NEXT_PUBLIC_SITE_URL` (your deployed app URL, e.g. `https://your-app.onrender.com`)
 - `SUPABASE_SERVICE_ROLE_KEY`
-- `RESEND_API_KEY`
-- `EMAIL_FROM` (must be a verified sender/domain in Resend)
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_USER`
+- `SMTP_PASS`
+- `SMTP_SECURE` (`true` for implicit TLS, usually port 465; otherwise `false`)
+- `EMAIL_FROM`
 - `STRIPE_SECRET_KEY`
 - `STRIPE_PUBLISHABLE_KEY` (optional for future client-side Stripe UI)
 - `STRIPE_WEBHOOK_SECRET`
@@ -44,8 +48,9 @@ npm run dev
 
 ## Email Delivery Notes
 
-- The app sends email through Resend API.
-- `EMAIL_FROM` must be a sender/domain verified in your Resend account.
+- The app sends email through SMTP using Nodemailer.
+- Required SMTP environment variables: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, and `EMAIL_FROM`.
+- Optional: `SMTP_SECURE=true` for implicit TLS (port 465). For STARTTLS (port 587), use `SMTP_SECURE=false`.
 - Use the Admin dashboard "Email Test" button after deploy to confirm delivery.
 
 ## Stripe Checkout Setup
