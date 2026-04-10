@@ -37,3 +37,16 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans);
 }
+
+input,
+textarea,
+select {
+  color: #000;
+  caret-color: #000;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #6b7280;
+  opacity: 1;
+}
