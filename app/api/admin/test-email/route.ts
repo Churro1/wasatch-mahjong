@@ -15,16 +15,16 @@ function sanitizeErrorMessage(error: unknown): string {
     return message;
   }
 
-  if (lower.includes("invalid login") || lower.includes("auth")) {
-    return "Email authentication failed. Verify SMTP_USER and SMTP_PASS.";
+  if (lower.includes("forbidden")) {
+    return "SendGrid API key is invalid or missing. Verify SENDGRID_API_KEY in environment variables.";
   }
 
-  if (lower.includes("smtp") || lower.includes("nodemailer") || lower.includes("econnrefused")) {
-    return "SMTP delivery failed. Verify SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, and SMTP_PASS.";
+  if (lower.includes("invalid login") || lower.includes("auth")) {
+    return "Email authentication failed. Verify SendGrid API key is correct.";
   }
 
   if (lower.includes("abort") || lower.includes("timeout")) {
-    return "SMTP request timed out. Check SMTP host reachability and retry.";
+    return "Email delivery request timed out. Check network connectivity and retry.";
   }
 
   return message;
@@ -61,16 +61,13 @@ export async function POST(req: NextRequest) {
   const payload = await req.json();
   const toEmail = typeof payload.to === "string" ? payload.to.trim() : "";
 
-  const hasSmtpHost = Boolean(process.env.SMTP_HOST?.trim());
-  const hasSmtpPort = Boolean(process.env.SMTP_PORT?.trim());
-  const hasSmtpUser = Boolean(process.env.SMTP_USER?.trim());
-  const hasSmtpPass = Boolean(process.env.SMTP_PASS?.trim());
+  const hasSendGridKey = Boolean(process.env.SENDGRID_API_KEY?.trim());
 
-  if (!hasSmtpHost || !hasSmtpPort || !hasSmtpUser || !hasSmtpPass) {
+  if (!hasSendGridKey) {
     return NextResponse.json(
       {
         error: "Test email failed.",
-        details: "Missing SMTP credentials in deployment environment variables.",
+        details: "Missing SENDGRID_API_KEY in deployment environment variables.",
       },
       { status: 500 }
     );
@@ -80,7 +77,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         error: "Test email failed.",
-        details: "EMAIL_FROM is required when using SMTP email delivery.",
+        details: "EMAIL_FROM is required.",
       },
       { status: 500 }
     );
