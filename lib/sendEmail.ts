@@ -1,5 +1,13 @@
 import { requireEnv } from "@/lib/env";
+import dns from "node:dns";
 import nodemailer from "nodemailer";
+
+try {
+  // Render deployments may not have reliable IPv6 egress; prefer IPv4 for SMTP lookups.
+  dns.setDefaultResultOrder("ipv4first");
+} catch {
+  // Ignore in environments that do not support changing default DNS order.
+}
 
 type SendEmailResult = {
   messageId: string;
