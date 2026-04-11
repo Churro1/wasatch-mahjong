@@ -1,87 +1,51 @@
 import { requireEnv } from "@/lib/env";
-import dns from "node:dns";
-import nodemailer from "nodemailer";
-
-try {
-  // Render deployments may not have reliable IPv6 egress; prefer IPv4 for SMTP lookups.
-  dns.setDefaultResultOrder("ipv4first");
-} catch {
-  // Ignore in environments that do not support changing default DNS order.
-}
+import sgMail from "@sendgrid/mail";
 
 type SendEmailResult = {
   messageId: string;
   accepted: string[];
   rejected: string[];
-  provider: "smtp";
+  provider: "sendgrid";
 };
 
-let transporter: nodemailer.Transporter | null = null;
-
-function isSecureSmtp(port: number, secureEnv: string | undefined) {
-  if (typeof secureEnv === "string" && secureEnv.trim().length > 0) {
-    return secureEnv.trim().toLowerCase() === "true";
-  }
-
-  // Port 465 is implicit TLS by convention.
-  return port === 465;
+// Initialize SendGrid client with API key
+function getSendGridClient() {
+  const apiKey = requireEnv("SENDGRID_API_KEY");
+  sgMail.setApiKey(apiKey);
+  return sgMail;
 }
 
-function getTransporter() {
-  if (transporter) {
-    return transporter;
-  }
-
-  const host = requireEnv("SMTP_HOST");
-  const portValue = requireEnv("SMTP_PORT");
-  const user = requireEnv("SMTP_USER");
-  const pass = requireEnv("SMTP_PASS");
-  const port = Number.parseInt(portValue, 10);
-
-  if (Number.isNaN(port) || port <= 0) {
-    throw new Error("SMTP_PORT must be a valid positive integer.");
-  }
-
-  transporter = nodemailer.createTransport({
-    host,
-    port,
-    secure: isSecureSmtp(port, process.env.SMTP_SECURE),
-    auth: {
-      user,
-      pass,
-    },
-  });
-
-  return transporter;
-}
-
-async function sendViaSmtp(params: {
+async function sendViaSendGrid(params: {
   from: string;
   to: string;
   subject: string;
   html: string;
 }): Promise<SendEmailResult> {
-  const smtp = getTransporter();
-  const info = await smtp.sendMail({
-    from: params.from,
-    to: params.to,
-    subject: params.subject,
-    html: params.html,
-  });
+  const sendGrid = getSendGridClient();
 
-  const accepted = (info.accepted || []).map((value: string | { address: string }) =>
-    typeof value === "string" ? value : value.address
-  );
-  const rejected = (info.rejected || []).map((value: string | { address: string }) =>
-    typeof value === "string" ? value : value.address
-  );
+  try {
+    const response = await sendGrid.send({
+      from: params.from,
+      to: params.to,
+      subject: params.subject,
+      html: params.html,
+    });
 
-  return {
-    messageId: info.messageId || "",
-    accepted,
-    rejected,
-    provider: "smtp",
-  };
+    // SendGrid returns an array of responses; take the first
+    const firstResponse = response[0];
+    const messageId = firstResponse.headers["x-message-id"] || "";
+
+    return {
+      messageId,
+      accepted: [params.to],
+      rejected: [],
+      provider: "sendgrid",
+    };
+  } catch (error) {
+    // If SendGrid rejects, return error in rejected field
+    const rejected = error instanceof Error && "response" in error ? [params.to] : [params.to];
+    throw error;
+  }
 }
 
 export async function sendEmail({
@@ -95,7 +59,7 @@ export async function sendEmail({
 }): Promise<SendEmailResult> {
   const fromAddress = requireEnv("EMAIL_FROM");
 
-  return sendViaSmtp({
+  return sendViaSendGrid({
     from: fromAddress,
     to,
     subject,
