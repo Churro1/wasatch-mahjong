@@ -29,17 +29,17 @@ export function validateStartupEnv() {
       return;
     }
 
-    const hasSendGridKey = Boolean(process.env.SENDGRID_API_KEY?.trim());
+    const hasMailerSendKey = Boolean(process.env.MAILERSEND_API_KEY?.trim());
     const hasFromAddress = Boolean(process.env.EMAIL_FROM?.trim());
 
-    if (hasSendGridKey && hasFromAddress) {
+    if (hasMailerSendKey && hasFromAddress) {
       return;
     }
 
     throw new Error(
       [
         "Missing required production email credentials:",
-        "- Set SENDGRID_API_KEY",
+        "- Set MAILERSEND_API_KEY",
         "- Set EMAIL_FROM",
       ].join("\n")
     );

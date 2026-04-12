@@ -15,12 +15,12 @@ function sanitizeErrorMessage(error: unknown): string {
     return message;
   }
 
-  if (lower.includes("forbidden")) {
-    return "SendGrid API key is invalid or missing. Verify SENDGRID_API_KEY in environment variables.";
+  if (lower.includes("forbidden") || lower.includes("unauthorized")) {
+    return "MailerSend API key is invalid or missing. Verify MAILERSEND_API_KEY in environment variables.";
   }
 
   if (lower.includes("invalid login") || lower.includes("auth")) {
-    return "Email authentication failed. Verify SendGrid API key is correct.";
+    return "Email authentication failed. Verify MailerSend API key is correct.";
   }
 
   if (lower.includes("abort") || lower.includes("timeout")) {
@@ -61,13 +61,13 @@ export async function POST(req: NextRequest) {
   const payload = await req.json();
   const toEmail = typeof payload.to === "string" ? payload.to.trim() : "";
 
-  const hasSendGridKey = Boolean(process.env.SENDGRID_API_KEY?.trim());
+  const hasMailerSendKey = Boolean(process.env.MAILERSEND_API_KEY?.trim());
 
-  if (!hasSendGridKey) {
+  if (!hasMailerSendKey) {
     return NextResponse.json(
       {
         error: "Test email failed.",
-        details: "Missing SENDGRID_API_KEY in deployment environment variables.",
+        details: "Missing MAILERSEND_API_KEY in deployment environment variables.",
       },
       { status: 500 }
     );
