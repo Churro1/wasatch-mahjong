@@ -18,6 +18,7 @@ type EventItem = {
   capacity: number;
   price: number;
   description: string;
+  eventDateTime: string;
 };
 
 const eventTypes: Array<"All" | EventType> = ["All", "Open Play", "Class", "Custom"];
@@ -57,6 +58,7 @@ function toUiEvent(row: {
     capacity,
     price: Number(row.price),
     description: row.description || "No description provided.",
+    eventDateTime: row.event_date,
   };
 }
 
@@ -90,6 +92,14 @@ export default function EventsPage() {
     () => (filter === "All" ? events : events.filter((event) => event.type === filter)),
     [events, filter]
   );
+
+  const upcomingEvents = useMemo(() => {
+    const now = new Date();
+    return filteredEvents.filter(event => {
+      const eventDateTime = parseISO(event.eventDateTime);
+      return eventDateTime > now;
+    });
+  }, [filteredEvents]);
 
   const today = new Date();
   const [calendarMonth, setCalendarMonth] = useState(today);
@@ -193,12 +203,12 @@ export default function EventsPage() {
             {loading ? (
               <div className="text-center text-[color:var(--wasatch-gray)]">Loading events...</div>
             ) : null}
-            {filteredEvents.length === 0 ? (
+            {upcomingEvents.length === 0 ? (
               <div className="text-center text-[color:var(--wasatch-gray)]">
-                No events found.
+                No upcoming events found.
               </div>
             ) : (
-              filteredEvents
+              upcomingEvents
                 .sort((a, b) => a.date.localeCompare(b.date))
                 .map((event) => (
                   <Card key={event.id} className="w-full">
