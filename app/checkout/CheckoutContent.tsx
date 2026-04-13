@@ -157,7 +157,9 @@ export default function CheckoutContent() {
               ) : null}
 
               <p className="text-sm text-[color:var(--wasatch-gray)]">
-                Continue to cart to confirm attendees and complete payment in secure Stripe checkout.
+                {event.price > 0
+                  ? "Continue to cart to confirm attendees and complete payment in secure Stripe checkout."
+                  : "Continue to cart to confirm attendees and complete signup with no payment required."}
               </p>
 
               <div className="flex flex-col sm:flex-row gap-3 pt-1">

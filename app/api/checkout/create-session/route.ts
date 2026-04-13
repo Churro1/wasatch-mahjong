@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { getStripe } from "@/lib/stripe";
 import { getSiteOrigin } from "@/lib/siteUrl";
 import { dispatchWaitlistOffersForEvent } from "@/lib/waitlist";
+import { sendEmail } from "@/lib/sendEmail";
 
 type OrderRow = {
   id: string;
@@ -80,8 +81,178 @@ type ActiveWaitlistOffer = {
     | null;
 };
 
+type EmailRecipient = {
+  email: string;
+  name: string;
+};
+
+type OrderDetails = {
+  id: string;
+  confirmation_email_sent_at: string | null;
+  checkout_order_attendees:
+    | Array<{
+        full_name: string;
+        email: string | null;
+        is_buyer: boolean;
+      }>
+    | null;
+  events:
+    | {
+        name: string;
+        event_date: string;
+      }
+    | Array<{
+        name: string;
+        event_date: string;
+      }>
+    | null;
+};
+
 function normalizeEmail(value: string | null | undefined) {
   return (value || "").trim().toLowerCase();
+}
+
+function buildBuyerConfirmationEmailHtml(params: {
+  attendeeName: string;
+  eventName: string;
+  eventDate: string;
+  attendeeCount: number;
+  totalAmount: number;
+}) {
+  return `
+    <h1>Wasatch Mahjong Confirmation</h1>
+    <p>Hi ${params.attendeeName},</p>
+    <p>Your registration for <strong>${params.eventName}</strong> is confirmed.</p>
+    <p><strong>Date:</strong> ${params.eventDate}</p>
+    <p><strong>Attendees on Order:</strong> ${params.attendeeCount}</p>
+    <p><strong>Total Paid:</strong> $${(params.totalAmount / 100).toFixed(2)}</p>
+    <h2>Day Of</h2>
+    <ul>
+      <li>Show up 15 minutes early to get signed in and settled.</li>
+      <li>No need to bring tiles.</li>
+      <li>Bring a card if you want.</li>
+    </ul>
+    <h2>Cancellation Policy</h2>
+    <p>Cancellations require at least 24 hours notice and include a $10 cancellation fee.</p>
+  `;
+}
+
+function buildGuestConfirmationEmailHtml(params: {
+  attendeeName: string;
+  eventName: string;
+  eventDate: string;
+  buyerName: string;
+}) {
+  return `
+    <h1>Wasatch Mahjong Confirmation</h1>
+    <p>Hi ${params.attendeeName},</p>
+    <p><strong>${params.buyerName}</strong> has registered you for <strong>${params.eventName}</strong>.</p>
+    <p><strong>Date:</strong> ${params.eventDate}</p>
+    <h2>Day Of</h2>
+    <ul>
+      <li>Show up 15 minutes early to get signed in and settled.</li>
+      <li>No need to bring tiles.</li>
+      <li>Bring a card if you want.</li>
+    </ul>
+    <h2>Cancellation Policy</h2>
+    <p>Cancellations require at least 24 hours notice and include a $10 cancellation fee.</p>
+  `;
+}
+
+async function sendOrderConfirmationEmails(params: {
+  supabaseAdmin: ReturnType<typeof getSupabaseAdmin>;
+  orderId: string;
+  buyerEmail: string | null;
+  attendeeCount: number;
+  totalAmount: number;
+}) {
+  const { supabaseAdmin, orderId, buyerEmail, attendeeCount, totalAmount } = params;
+
+  const { data: orderDetails, error: orderDetailsError } = await supabaseAdmin
+    .from("checkout_orders")
+    .select("id, confirmation_email_sent_at, checkout_order_attendees(full_name, email, is_buyer), events(name, event_date)")
+    .eq("id", orderId)
+    .single();
+
+  if (orderDetailsError || !orderDetails) {
+    console.error("Failed to load order details for confirmation email", {
+      orderId,
+      error: orderDetailsError?.message,
+    });
+    return;
+  }
+
+  const order = orderDetails as OrderDetails;
+  if (order.confirmation_email_sent_at) {
+    return;
+  }
+
+  const eventSummary = order.events ? (Array.isArray(order.events) ? order.events[0] : order.events) : null;
+  const uniqueEmails = new Set<string>();
+  const recipients: EmailRecipient[] = [];
+  const buyerAttendee = (order.checkout_order_attendees || []).find((attendee) => attendee.is_buyer) || null;
+  const buyerEmailFromOrder = buyerAttendee?.email?.trim().toLowerCase() || "";
+  const buyerEmailFromFinalize = typeof buyerEmail === "string" ? buyerEmail.trim().toLowerCase() : "";
+  const normalizedBuyerEmail = buyerEmailFromFinalize || buyerEmailFromOrder;
+  const buyerName = buyerAttendee?.full_name || "there";
+
+  if (normalizedBuyerEmail) {
+    uniqueEmails.add(normalizedBuyerEmail);
+    recipients.push({ email: normalizedBuyerEmail, name: buyerName });
+  }
+
+  for (const attendee of order.checkout_order_attendees || []) {
+    if (!attendee.email) {
+      continue;
+    }
+    const email = attendee.email.trim().toLowerCase();
+    if (!email || uniqueEmails.has(email)) {
+      continue;
+    }
+    uniqueEmails.add(email);
+    recipients.push({ email, name: attendee.full_name });
+  }
+
+  let sentCount = 0;
+  for (const recipient of recipients) {
+    try {
+      const isBuyer = recipient.email === normalizedBuyerEmail;
+      const emailHtml = isBuyer
+        ? buildBuyerConfirmationEmailHtml({
+            attendeeName: recipient.name,
+            eventName: eventSummary?.name || "Wasatch Mahjong Event",
+            eventDate: eventSummary?.event_date || "",
+            attendeeCount,
+            totalAmount,
+          })
+        : buildGuestConfirmationEmailHtml({
+            attendeeName: recipient.name,
+            eventName: eventSummary?.name || "Wasatch Mahjong Event",
+            eventDate: eventSummary?.event_date || "",
+            buyerName,
+          });
+
+      await sendEmail({
+        to: recipient.email,
+        subject: `Wasatch Mahjong Confirmation: ${eventSummary?.name || "Your Event"}`,
+        html: emailHtml,
+      });
+      sentCount += 1;
+    } catch (recipientEmailError) {
+      console.error("Failed to send confirmation email to recipient", {
+        orderId,
+        recipientEmail: recipient.email,
+        error: recipientEmailError,
+      });
+    }
+  }
+
+  if (sentCount > 0) {
+    await supabaseAdmin
+      .from("checkout_orders")
+      .update({ confirmation_email_sent_at: new Date().toISOString() })
+      .eq("id", orderId);
+  }
 }
 
 async function ensureEventStripePrice(params: {
@@ -323,8 +494,71 @@ export async function POST(req: NextRequest) {
 
   const attendeeCount = attendees.length;
   const unitAmount = Math.round(Number(event.price) * 100);
-  if (unitAmount <= 0) {
-    return NextResponse.json({ error: "Checkout requires an event price greater than $0." }, { status: 400 });
+
+  if (unitAmount < 0) {
+    return NextResponse.json({ error: "Checkout requires a valid event price." }, { status: 400 });
+  }
+
+  if (unitAmount === 0) {
+    const freeSessionId = `free_${order.id}`;
+    const { data: finalizedRows, error: finalizeError } = await supabaseAdmin.rpc("finalize_checkout_order", {
+      p_order_id: order.id,
+      p_checkout_session_id: freeSessionId,
+      p_payment_intent_id: null,
+      p_payment_status: "no_payment_required",
+    });
+
+    if (finalizeError) {
+      return NextResponse.json({ error: finalizeError.message }, { status: 500 });
+    }
+
+    const finalizedCandidate = Array.isArray(finalizedRows) ? finalizedRows[0] : finalizedRows;
+    if (!finalizedCandidate) {
+      return NextResponse.json({ error: "Finalize checkout returned no order." }, { status: 500 });
+    }
+
+    const finalized = finalizedCandidate as {
+      order_id: string;
+      buyer_user_id: string;
+      buyer_email: string | null;
+      attendee_count: number;
+      total_amount: number;
+    };
+
+    if (matchingOffer) {
+      const { data: claimedOffer } = await supabaseAdmin
+        .from("waitlist_offers")
+        .update({
+          status: "claimed",
+          claimed_at: new Date().toISOString(),
+          claimed_by_user_id: finalized.buyer_user_id,
+          claimed_order_id: finalized.order_id,
+        })
+        .eq("offer_token", matchingOffer.offer_token)
+        .eq("status", "active")
+        .select("entry_id")
+        .maybeSingle();
+
+      if (claimedOffer?.entry_id) {
+        await supabaseAdmin
+          .from("waitlist_entries")
+          .update({
+            status: "claimed",
+            claimed_at: new Date().toISOString(),
+          })
+          .eq("id", claimedOffer.entry_id);
+      }
+    }
+
+    await sendOrderConfirmationEmails({
+      supabaseAdmin,
+      orderId: finalized.order_id,
+      buyerEmail: finalized.buyer_email,
+      attendeeCount: finalized.attendee_count || attendeeCount,
+      totalAmount: finalized.total_amount || 0,
+    });
+
+    return NextResponse.json({ url: `${siteOrigin}/success?session_id=${encodeURIComponent(freeSessionId)}` });
   }
 
   const orderCurrency = (order.currency || "usd").toLowerCase();

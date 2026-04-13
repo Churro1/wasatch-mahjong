@@ -427,7 +427,11 @@ export default function CartContent() {
 
     setAttendees([...trimmedAttendees]);
     setRemovedAttendeeIds([]);
-    setStatusMessage("Cart saved. Stripe checkout is the next step.");
+    setStatusMessage(
+      event.price > 0
+        ? "Cart saved. Stripe checkout is the next step."
+        : "Cart saved. You can finish signup without payment."
+    );
     setSaving(false);
     return true;
   };
@@ -654,7 +658,13 @@ export default function CartContent() {
 
                 <div className="pt-2 flex flex-col gap-3">
                   <Button variant="primary" onClick={handleCheckout} disabled={saving || redirectingToCheckout}>
-                    {saving || redirectingToCheckout ? "Preparing Checkout..." : "Continue to Checkout"}
+                    {saving || redirectingToCheckout
+                      ? event.price > 0
+                        ? "Preparing Checkout..."
+                        : "Finalizing Signup..."
+                      : event.price > 0
+                        ? "Continue to Checkout"
+                        : "Complete Signup"}
                   </Button>
                   <Link href="/events">
                     <Button variant="outline" className="w-full">Back to Events</Button>
