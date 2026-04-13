@@ -557,7 +557,7 @@ export default function CartContent() {
                       </div>
 
                       <div>
-                        <label htmlFor={`attendee-${index}-email`} className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Email (optional)</label>
+                        <label htmlFor={`attendee-${index}-email`} className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Email (Required)</label>
                         <input
                           id={`attendee-${index}-email`}
                           name={`attendee-${index}-email`}
