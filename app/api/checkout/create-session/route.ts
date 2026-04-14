@@ -81,6 +81,17 @@ type ActiveWaitlistOffer = {
     | null;
 };
 
+type CouponRow = {
+  id: string;
+  code: string;
+  discount_type: "dollar" | "percentage" | "bogo";
+  discount_value: number;
+  bogo_buy_quantity: number;
+  bogo_get_quantity: number;
+  expiry_date: string | null;
+  is_active: boolean;
+};
+
 type EmailRecipient = {
   email: string;
   name: string;
@@ -351,8 +362,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  const { orderId, offerToken } = await req.json();
+  const { orderId, offerToken, couponCode } = await req.json();
   const normalizedOfferToken = typeof offerToken === "string" ? offerToken : "";
+  const normalizedCouponCode = typeof couponCode === "string" ? couponCode.trim().toUpperCase() : "";
   if (!orderId) {
     return NextResponse.json({ error: "Order ID is required." }, { status: 400 });
   }
@@ -499,7 +511,66 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Checkout requires a valid event price." }, { status: 400 });
   }
 
-  if (unitAmount === 0) {
+  const subtotalAmount = unitAmount * attendeeCount;
+  let discountAmount = 0;
+
+  if (normalizedCouponCode) {
+    const { data: couponData, error: couponError } = await supabaseAdmin
+      .from("coupons")
+      .select("id, code, discount_type, discount_value, bogo_buy_quantity, bogo_get_quantity, expiry_date, is_active")
+      .eq("code", normalizedCouponCode)
+      .maybeSingle();
+
+    if (couponError) {
+      return NextResponse.json({ error: "Failed to validate coupon." }, { status: 500 });
+    }
+
+    const coupon = couponData as CouponRow | null;
+    if (!coupon) {
+      return NextResponse.json({ error: "Coupon code not found." }, { status: 404 });
+    }
+
+    if (!coupon.is_active) {
+      return NextResponse.json({ error: "This coupon is no longer active." }, { status: 400 });
+    }
+
+    if (coupon.expiry_date && coupon.expiry_date < new Date().toISOString()) {
+      return NextResponse.json({ error: "This coupon has expired." }, { status: 400 });
+    }
+
+    if (coupon.discount_type === "dollar") {
+      discountAmount = Math.round(coupon.discount_value * 100);
+    } else if (coupon.discount_type === "percentage") {
+      discountAmount = Math.round(subtotalAmount * (coupon.discount_value / 100));
+    } else {
+      const buyQty = coupon.bogo_buy_quantity || 1;
+      const getQty = coupon.bogo_get_quantity || 1;
+      const groupSize = buyQty + getQty;
+      const fullGroups = Math.floor(attendeeCount / groupSize);
+      const remainder = attendeeCount % groupSize;
+      const freeSpots = fullGroups * getQty + Math.max(0, remainder - buyQty);
+      const boundedFreeSpots = Math.min(freeSpots, attendeeCount);
+      discountAmount = boundedFreeSpots * unitAmount;
+    }
+  }
+
+  discountAmount = Math.max(0, Math.min(discountAmount, subtotalAmount));
+  const totalAmount = Math.max(0, subtotalAmount - discountAmount);
+
+  const { error: preCheckoutOrderUpdateError } = await supabaseAdmin
+    .from("checkout_orders")
+    .update({
+      subtotal_amount: subtotalAmount,
+      total_amount: totalAmount,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", order.id);
+
+  if (preCheckoutOrderUpdateError) {
+    return NextResponse.json({ error: preCheckoutOrderUpdateError.message }, { status: 500 });
+  }
+
+  if (totalAmount === 0) {
     const freeSessionId = `free_${order.id}`;
     const { data: finalizedRows, error: finalizeError } = await supabaseAdmin.rpc("finalize_checkout_order", {
       p_order_id: order.id,
@@ -562,21 +633,24 @@ export async function POST(req: NextRequest) {
   }
 
   const orderCurrency = (order.currency || "usd").toLowerCase();
-  const totalAmount = unitAmount * attendeeCount;
   let stripePriceId: string;
-  try {
-    stripePriceId = await ensureEventStripePrice({
-      stripe,
-      supabaseAdmin,
-      event,
-      currency: orderCurrency,
-      unitAmount,
-    });
-  } catch (catalogError) {
-    return NextResponse.json(
-      { error: catalogError instanceof Error ? catalogError.message : "Failed to prepare Stripe product pricing." },
-      { status: 500 }
-    );
+  if (discountAmount === 0) {
+    try {
+      stripePriceId = await ensureEventStripePrice({
+        stripe,
+        supabaseAdmin,
+        event,
+        currency: orderCurrency,
+        unitAmount,
+      });
+    } catch (catalogError) {
+      return NextResponse.json(
+        { error: catalogError instanceof Error ? catalogError.message : "Failed to prepare Stripe product pricing." },
+        { status: 500 }
+      );
+    }
+  } else {
+    stripePriceId = "";
   }
 
   let session: Stripe.Checkout.Session;
@@ -597,13 +671,29 @@ export async function POST(req: NextRequest) {
         buyerUserId: user.id,
         attendeeCount: String(attendeeCount),
         offerToken: normalizedOfferToken,
+        couponCode: normalizedCouponCode,
+        discountAmount: String(discountAmount),
       },
-      line_items: [
-        {
-          quantity: attendeeCount,
-          price: stripePriceId,
-        },
-      ],
+      line_items:
+        discountAmount === 0
+          ? [
+              {
+                quantity: attendeeCount,
+                price: stripePriceId,
+              },
+            ]
+          : [
+              {
+                quantity: 1,
+                price_data: {
+                  currency: orderCurrency,
+                  unit_amount: totalAmount,
+                  product_data: {
+                    name: `${event.name} (${attendeeCount} attendee${attendeeCount === 1 ? "" : "s"})`,
+                  },
+                },
+              },
+            ],
     });
   } catch (sessionError) {
     return NextResponse.json(
@@ -621,7 +711,7 @@ export async function POST(req: NextRequest) {
     .from("checkout_orders")
     .update({
       status: "pending_payment",
-      subtotal_amount: totalAmount,
+      subtotal_amount: subtotalAmount,
       total_amount: totalAmount,
       stripe_checkout_session_id: session.id,
       stripe_payment_status: session.payment_status,

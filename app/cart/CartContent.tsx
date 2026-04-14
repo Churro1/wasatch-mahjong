@@ -45,6 +45,14 @@ type CheckoutOrderRow = {
     | null;
 };
 
+type AppliedCoupon = {
+  code: string;
+  discountType: "dollar" | "percentage" | "bogo";
+  discountValue: number;
+  bogoBuyQuantity?: number;
+  bogoGetQuantity?: number;
+};
+
 const MAX_ATTENDEES = 4;
 
 function toCartTypeLabel(type: CartEvent["event_type"]): string {
@@ -86,6 +94,10 @@ export default function CartContent() {
   const [orderId, setOrderId] = useState<string | null>(null);
   const [attendees, setAttendees] = useState<CartOrderAttendee[]>([]);
   const [removedAttendeeIds, setRemovedAttendeeIds] = useState<string[]>([]);
+  const [couponCode, setCouponCode] = useState("");
+  const [couponError, setCouponError] = useState("");
+  const [applyingCoupon, setApplyingCoupon] = useState(false);
+  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
 
   const cartPath = useMemo(() => {
     if (!eventId) {
@@ -114,6 +126,37 @@ export default function CartContent() {
     }
     return attendees.length * event.price;
   }, [attendees.length, event]);
+
+  const discountAmount = useMemo(() => {
+    if (!event || !appliedCoupon || attendees.length <= 0) {
+      return 0;
+    }
+
+    if (appliedCoupon.discountType === "dollar") {
+      return Math.min(subtotal, appliedCoupon.discountValue);
+    }
+
+    if (appliedCoupon.discountType === "percentage") {
+      return Math.min(subtotal, subtotal * (appliedCoupon.discountValue / 100));
+    }
+
+    const buyQty = appliedCoupon.bogoBuyQuantity || 1;
+    const getQty = appliedCoupon.bogoGetQuantity || 1;
+    const groupSize = buyQty + getQty;
+    if (groupSize <= 0) {
+      return 0;
+    }
+
+    const fullGroups = Math.floor(attendees.length / groupSize);
+    const remainder = attendees.length % groupSize;
+    const freeSpots = fullGroups * getQty + Math.max(0, remainder - buyQty);
+    const boundedFreeSpots = Math.min(freeSpots, attendees.length);
+    return Math.min(subtotal, boundedFreeSpots * event.price);
+  }, [appliedCoupon, attendees.length, event, subtotal]);
+
+  const totalAfterDiscount = useMemo(() => {
+    return Math.max(0, subtotal - discountAmount);
+  }, [subtotal, discountAmount]);
 
   useEffect(() => {
     async function loadCart() {
@@ -311,6 +354,69 @@ export default function CartContent() {
     });
   };
 
+  const handleApplyCoupon = async () => {
+    const normalizedCode = couponCode.trim().toUpperCase();
+    if (!normalizedCode) {
+      setCouponError("Please enter a coupon code.");
+      return;
+    }
+
+    if (!event || attendees.length <= 0) {
+      setCouponError("Add at least one attendee before applying a coupon.");
+      return;
+    }
+
+    setApplyingCoupon(true);
+    setCouponError("");
+
+    try {
+      const response = await fetch("/api/checkout/validate-coupon", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          couponCode: normalizedCode,
+          eventPrice: subtotal,
+        }),
+      });
+
+      const payload = (await response.json()) as {
+        error?: string;
+        coupon?: {
+          code: string;
+          discountType: "dollar" | "percentage" | "bogo";
+          discountValue: number;
+          bogoBuyQuantity?: number;
+          bogoGetQuantity?: number;
+        };
+      };
+
+      if (!response.ok || !payload.coupon) {
+        setCouponError(payload.error || "Unable to apply this coupon.");
+        setAppliedCoupon(null);
+        setApplyingCoupon(false);
+        return;
+      }
+
+      setAppliedCoupon(payload.coupon);
+      setCouponCode(payload.coupon.code);
+      setCouponError("");
+      setStatusMessage("Coupon applied.");
+    } catch {
+      setCouponError("We could not validate that coupon. Please try again.");
+      setAppliedCoupon(null);
+    }
+
+    setApplyingCoupon(false);
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCode("");
+    setCouponError("");
+  };
+
   const handleSaveCart = async (): Promise<boolean> => {
     if (!orderId || !event) {
       return false;
@@ -428,7 +534,7 @@ export default function CartContent() {
     setAttendees([...trimmedAttendees]);
     setRemovedAttendeeIds([]);
     setStatusMessage(
-      event.price > 0
+      totalAfterDiscount > 0
         ? "Cart saved. Stripe checkout is the next step."
         : "Cart saved. You can finish signup without payment."
     );
@@ -466,7 +572,11 @@ export default function CartContent() {
         "Content-Type": "application/json",
         Authorization: `Bearer ${accessToken}`,
       },
-      body: JSON.stringify({ orderId, offerToken: offerToken || undefined }),
+      body: JSON.stringify({
+        orderId,
+        offerToken: offerToken || undefined,
+        couponCode: appliedCoupon?.code || undefined,
+      }),
     });
 
     const responseText = await response.text();
@@ -648,21 +758,72 @@ export default function CartContent() {
                     <span>Spots Remaining</span>
                     <span>{event.spots_remaining ?? "-"}</span>
                   </div>
+                  {appliedCoupon ? (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <span>Subtotal</span>
+                        <span>${subtotal.toFixed(2)}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-green-700">
+                        <span>Coupon ({appliedCoupon.code})</span>
+                        <span>- ${discountAmount.toFixed(2)}</span>
+                      </div>
+                    </>
+                  ) : null}
                   <div className="flex items-center justify-between text-lg font-semibold text-[color:var(--wasatch-blue)] pt-2">
                     <span>Total</span>
-                    <span>${subtotal.toFixed(2)}</span>
+                    <span>${totalAfterDiscount.toFixed(2)}</span>
                   </div>
                 </div>
 
                 {event.description ? <p className="text-sm leading-6">{event.description}</p> : null}
 
+                <div className="rounded-2xl border border-[color:var(--wasatch-gray)]/30 bg-white p-4 space-y-2">
+                  <label htmlFor="cart-coupon-code" className="block text-sm font-medium text-[color:var(--wasatch-gray)]">
+                    Coupon Code
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      id="cart-coupon-code"
+                      name="cartCouponCode"
+                      type="text"
+                      value={couponCode}
+                      onChange={(e) => {
+                        setCouponCode(e.target.value.toUpperCase());
+                        setCouponError("");
+                      }}
+                      placeholder="Enter code"
+                      className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2"
+                      maxLength={20}
+                      disabled={applyingCoupon}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleApplyCoupon}
+                      disabled={applyingCoupon || !couponCode.trim()}
+                    >
+                      {applyingCoupon ? "Applying..." : "Apply"}
+                    </Button>
+                  </div>
+                  {appliedCoupon ? (
+                    <div className="flex items-center justify-between text-sm text-green-700">
+                      <span>Applied: {appliedCoupon.code}</span>
+                      <button type="button" onClick={handleRemoveCoupon} className="underline">
+                        Remove
+                      </button>
+                    </div>
+                  ) : null}
+                  {couponError ? <p className="text-sm text-[color:var(--wasatch-red)]">{couponError}</p> : null}
+                </div>
+
                 <div className="pt-2 flex flex-col gap-3">
                   <Button variant="primary" onClick={handleCheckout} disabled={saving || redirectingToCheckout}>
                     {saving || redirectingToCheckout
-                      ? event.price > 0
+                      ? totalAfterDiscount > 0
                         ? "Preparing Checkout..."
                         : "Finalizing Signup..."
-                      : event.price > 0
+                      : totalAfterDiscount > 0
                         ? "Continue to Checkout"
                         : "Complete Signup"}
                   </Button>
