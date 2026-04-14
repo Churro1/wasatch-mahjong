@@ -2348,25 +2348,34 @@ export default function AdminPage() {
             ) : (
               <div className="space-y-3">
                 <h3 className="font-semibold text-[color:var(--wasatch-blue)]">Usage Details</h3>
-                {couponUsage.usage.map((usage, idx) => (
-                  <div key={idx} className="rounded-lg border border-[color:var(--wasatch-gray)]/30 bg-white p-3 text-sm">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <p className="text-[color:var(--wasatch-gray)]">User ID</p>
-                        <p className="font-mono text-xs break-all">{usage.userId}</p>
-                      </div>
-                      <div>
-                        <p className="text-[color:var(--wasatch-gray)]">Used At</p>
-                        <p>{format(parseISO(usage.usedAt), "MMM d, yyyy • HH:mm")}</p>
-                      </div>
-                      <div>
-                        <p className="text-[color:var(--wasatch-gray)]">Discount Amount</p>
-                        <p className="font-semibold">${usage.discountAmount.toFixed(2)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[color:var(--wasatch-gray)]">Order ID</p>
-                        <p className="font-mono text-xs">{usage.orderId || "N/A"}</p>
-                      </div>
+                {couponUsage.usage.map((usage) => (
+                  <div
+                    key={usage.userId}
+                    className="rounded-lg border border-[color:var(--wasatch-gray)]/30 bg-white p-3 text-sm space-y-3"
+                  >
+                    <div>
+                      <p className="text-[color:var(--wasatch-gray)]">User ID</p>
+                      <p className="font-mono text-xs break-all">{usage.userId}</p>
+                      <p className="text-xs text-[color:var(--wasatch-gray)] mt-1">Uses: {usage.usageCount}</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      {usage.uses.map((singleUse, useIndex) => (
+                        <div key={`${usage.userId}-${useIndex}`} className="grid grid-cols-2 gap-2">
+                          <div>
+                            <p className="text-[color:var(--wasatch-gray)]">Used At</p>
+                            <p>{format(parseISO(singleUse.usedAt), "MMM d, yyyy • HH:mm")}</p>
+                          </div>
+                          <div>
+                            <p className="text-[color:var(--wasatch-gray)]">Discount Amount</p>
+                            <p className="font-semibold">${singleUse.discountAmount.toFixed(2)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[color:var(--wasatch-gray)]">Order ID</p>
+                            <p className="font-mono text-xs">{singleUse.orderId || "N/A"}</p>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ))}
