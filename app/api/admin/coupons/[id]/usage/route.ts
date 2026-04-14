@@ -7,11 +7,12 @@ function isUuid(value: string) {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   const supabaseAdmin = getSupabaseAdmin();
   const authorization = req.headers.get("authorization");
   const accessToken = authorization?.startsWith("Bearer ") ? authorization.slice(7) : null;
+  const params = await context.params;
   const couponId = params.id || "";
 
   if (!accessToken) {
