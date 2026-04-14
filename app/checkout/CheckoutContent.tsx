@@ -19,6 +19,13 @@ type CheckoutEvent = {
   capacity: number | null;
 };
 
+type AppliedCoupon = {
+  code: string;
+  discountType: string;
+  discountValue: number;
+  discountAmount: number;
+};
+
 function toCheckoutTypeLabel(type: CheckoutEvent["event_type"]): string {
   if (type === "class") {
     return "Class";
@@ -38,6 +45,10 @@ export default function CheckoutContent() {
   const [error, setError] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [event, setEvent] = useState<CheckoutEvent | null>(null);
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
+  const [couponError, setCouponError] = useState("");
+  const [applyingCoupon, setApplyingCoupon] = useState(false);
 
   const checkoutPath = useMemo(() => {
     if (!eventId) {
@@ -90,6 +101,52 @@ export default function CheckoutContent() {
 
     loadCheckoutData();
   }, [checkoutPath, eventId, router]);
+
+  const appliedDiscount = appliedCoupon ? appliedCoupon.discountAmount : 0;
+  const finalPrice = event ? Math.max(0, event.price - appliedDiscount) : 0;
+
+  const handleApplyCoupon = async () => {
+    const code = couponCode.trim().toUpperCase();
+    if (!code) {
+      setCouponError("Please enter a coupon code.");
+      return;
+    }
+
+    setApplyingCoupon(true);
+    setCouponError("");
+
+    try {
+      const response = await fetch("/api/checkout/validate-coupon", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          couponCode: code,
+          eventPrice: event?.price || 0,
+        }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        setCouponError(payload.error || "Invalid coupon code.");
+        setApplyingCoupon(false);
+        return;
+      }
+
+      setAppliedCoupon(payload.coupon);
+      setCouponError("");
+    } catch (err) {
+      setCouponError("Failed to apply coupon. Please try again.");
+    } finally {
+      setApplyingCoupon(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCode("");
+    setCouponError("");
+  };
 
   const handleContinue = () => {
     if (!eventId) {
@@ -146,24 +203,87 @@ export default function CheckoutContent() {
                     {typeof event.spots_remaining === "number" ? `${event.spots_remaining}/${event.capacity ?? "-"}` : "-"}
                   </span>
                 </div>
-                <div className="flex items-center justify-between text-lg">
+                {appliedCoupon && (
+                  <>
+                    <div className="flex items-center justify-between text-[color:var(--wasatch-gray)]">
+                      <span>Subtotal</span>
+                      <span className="font-medium">${event.price}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-[color:var(--wasatch-green)] font-medium">
+                      <span>{appliedCoupon.code}</span>
+                      <span>-${appliedCoupon.discountAmount.toFixed(2)}</span>
+                    </div>
+                  </>
+                )}
+                <div className="flex items-center justify-between text-lg border-t border-[color:var(--wasatch-gray)]/20 pt-2">
                   <span className="font-serif text-[color:var(--wasatch-blue)] font-bold">Total</span>
-                  <span className="font-serif text-[color:var(--wasatch-red)] font-bold">${event.price}</span>
+                  <span className={`font-serif font-bold ${
+                    finalPrice === 0 ? "text-green-600" : "text-[color:var(--wasatch-red)]"
+                  }`}>
+                    ${finalPrice.toFixed(2)}
+                  </span>
                 </div>
               </div>
+
+              {!appliedCoupon ? (
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Enter coupon code"
+                      value={couponCode}
+                      onChange={(e) => {
+                        setCouponCode(e.target.value);
+                        setCouponError("");
+                      }}
+                      maxLength={20}
+                      disabled={applyingCoupon}
+                      className="flex-1 rounded-lg border border-[color:var(--wasatch-gray)] bg-white px-3 py-2 text-sm disabled:bg-gray-100"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleApplyCoupon}
+                      disabled={applyingCoupon || !couponCode.trim()}
+                      className="whitespace-nowrap"
+                    >
+                      {applyingCoupon ? "Applying..." : "Apply"}
+                    </Button>
+                  </div>
+                  {couponError && <p className="text-xs text-[color:var(--wasatch-red)]">{couponError}</p>}
+                </div>
+              ) : (
+                <div className="rounded-lg bg-green-50 border border-green-200 p-3 flex items-center justify-between">
+                  <p className="text-sm font-medium text-green-700">
+                    ✓ Coupon "{appliedCoupon.code}" applied!
+                  </p>
+                  <button
+                    onClick={handleRemoveCoupon}
+                    className="text-sm text-green-600 hover:text-green-700 underline"
+                  >
+                    Remove
+                  </button>
+                </div>
+              )}
 
               {event.description ? (
                 <p className="text-[color:var(--wasatch-gray)] leading-7">{event.description}</p>
               ) : null}
 
               <p className="text-sm text-[color:var(--wasatch-gray)]">
-                {event.price > 0
+                {finalPrice > 0
                   ? "Continue to cart to confirm attendees and complete payment in secure Stripe checkout."
-                  : "Continue to cart to confirm attendees and complete signup with no payment required."}
+                  : finalPrice === 0 && event.price > 0
+                    ? "Your coupon covers this event! Continue to complete signup."
+                    : "Continue to cart to confirm attendees and complete signup with no payment required."}
               </p>
 
               <div className="flex flex-col sm:flex-row gap-3 pt-1">
-                <Button variant="primary" onClick={handleContinue} className="w-full sm:w-auto">
+                <Button
+                  variant="primary"
+                  onClick={handleContinue}
+                  className="w-full sm:w-auto"
+                >
                   Continue to Cart
                 </Button>
                 <Link href="/events" className="w-full sm:w-auto">

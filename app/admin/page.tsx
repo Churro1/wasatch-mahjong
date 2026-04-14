@@ -63,6 +63,28 @@ type RepeatPattern = "daily" | "weekly" | "biweekly" | "monthly" | "custom";
 type RepeatEndType = "count" | "date";
 type RecurrenceUnit = "day" | "week" | "month";
 
+type Coupon = {
+  id: string;
+  code: string;
+  discountType: "dollar" | "percentage" | "bogo";
+  discountValue: number;
+  expiryDate: string | null;
+  maxUsesPerUser: number;
+  isActive: boolean;
+  isExpired: boolean;
+  createdAt: string;
+};
+
+type CouponUsage = {
+  userId: string;
+  usageCount: number;
+  uses: Array<{
+    usedAt: string;
+    discountAmount: number;
+    orderId: string | null;
+  }>;
+};
+
 const DAY_OPTIONS: Array<{ value: number; label: string }> = [
   { value: 0, label: "Sun" },
   { value: 1, label: "Mon" },
@@ -124,6 +146,7 @@ export default function AdminPage() {
   const [adminUserIdInput, setAdminUserIdInput] = useState("");
   const [adminStatus, setAdminStatus] = useState("");
   const [adminSaving, setAdminSaving] = useState(false);
+  const [exportingAccounts, setExportingAccounts] = useState(false);
   const [testEmailTo, setTestEmailTo] = useState("");
   const [testEmailStatus, setTestEmailStatus] = useState("");
   const [sendingTestEmail, setSendingTestEmail] = useState(false);
@@ -132,6 +155,7 @@ export default function AdminPage() {
   const [eventsStatus, setEventsStatus] = useState("");
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
+  const [exportingEventId, setExportingEventId] = useState<string | null>(null);
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createStep, setCreateStep] = useState<"type" | "form">("type");
@@ -178,6 +202,20 @@ export default function AdminPage() {
   const [editCapacity, setEditCapacity] = useState("1");
   const [editSpots, setEditSpots] = useState("1");
   const [savingEdit, setSavingEdit] = useState(false);
+
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [couponsStatus, setCouponsStatus] = useState("");
+  const [couponModalOpen, setCouponModalOpen] = useState(false);
+  const [couponFormStep, setCouponFormStep] = useState<"form" | "confirm">("form");
+  const [couponCode, setCouponCode] = useState("");
+  const [couponDiscountType, setCouponDiscountType] = useState<"dollar" | "percentage" | "bogo">("dollar");
+  const [couponDiscountValue, setCouponDiscountValue] = useState("");
+  const [couponExpiryDate, setCouponExpiryDate] = useState("");
+  const [couponMaxUses, setCouponMaxUses] = useState("1");
+  const [creatingCoupon, setCreatingCoupon] = useState(false);
+  const [viewingCouponUsageId, setViewingCouponUsageId] = useState<string | null>(null);
+  const [couponUsage, setCouponUsage] = useState<{ coupon: { id: string; code: string; discountType: string; discountValue: number }; usage: CouponUsage[] } | null>(null);
+  const [deletingCouponId, setDeletingCouponId] = useState<string | null>(null);
 
   const activePresets = useMemo(
     () => presets.filter((preset) => preset.is_active),
@@ -283,7 +321,7 @@ export default function AdminPage() {
       }
 
       setIsAdmin(true);
-      await Promise.all([loadAdminUsers(), loadEvents(), loadPresets()]);
+      await Promise.all([loadAdminUsers(), loadEvents(), loadPresets(), loadCoupons()]);
       setLoading(false);
     }
 
@@ -341,6 +379,62 @@ export default function AdminPage() {
     );
     await loadAdminUsers();
     setAdminSaving(false);
+  };
+
+  const handleExportAccountEmails = async () => {
+    setExportingAccounts(true);
+    setAdminStatus("");
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const accessToken = session?.access_token;
+
+    if (!accessToken) {
+      setAdminStatus("Your session expired. Please sign in again.");
+      setExportingAccounts(false);
+      return;
+    }
+
+    const response = await fetch("/api/admin/export-account-emails", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      const responseText = await response.text();
+      let payload: { error?: string } = {};
+      if (responseText) {
+        try {
+          payload = JSON.parse(responseText) as { error?: string };
+        } catch {
+          payload = { error: "Unable to export account emails." };
+        }
+      }
+      setAdminStatus(payload.error || "Unable to export account emails.");
+      setExportingAccounts(false);
+      return;
+    }
+
+    const blob = await response.blob();
+    const contentDisposition = response.headers.get("content-disposition") || "";
+    const filenameMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
+    const filename = filenameMatch?.[1] || "wasatch-mahjong-accounts.csv";
+
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(blobUrl);
+
+    setAdminStatus("Account email export downloaded.");
+    setExportingAccounts(false);
   };
 
   const handleSendTestEmail = async (e: FormEvent<HTMLFormElement>) => {
@@ -901,6 +995,63 @@ export default function AdminPage() {
     setDeletingEventId(null);
   };
 
+  const handleExportContacts = async (eventId: string) => {
+    setExportingEventId(eventId);
+    setEventsStatus("");
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const accessToken = session?.access_token;
+
+    if (!accessToken) {
+      setEventsStatus("Your session expired. Please sign in again.");
+      setExportingEventId(null);
+      return;
+    }
+
+    const response = await fetch("/api/admin/export-event-contacts", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ eventId }),
+    });
+
+    if (!response.ok) {
+      const responseText = await response.text();
+      let payload: { error?: string } = {};
+      if (responseText) {
+        try {
+          payload = JSON.parse(responseText) as { error?: string };
+        } catch {
+          payload = { error: "Could not export contacts." };
+        }
+      }
+      setEventsStatus(payload.error || "Could not export contacts.");
+      setExportingEventId(null);
+      return;
+    }
+
+    const blob = await response.blob();
+    const contentDisposition = response.headers.get("content-disposition") || "";
+    const filenameMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
+    const filename = filenameMatch?.[1] || "event-contacts.csv";
+
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(blobUrl);
+
+    setEventsStatus("Contact export downloaded.");
+    setExportingEventId(null);
+  };
+
   const handleCancelOrder = async (orderId: string, eventDate: string) => {
     const confirmed = window.confirm(
       "Cancel this paid order? Any eligible refund will be reduced by the $10 cancellation fee."
@@ -953,6 +1104,192 @@ export default function AdminPage() {
     setEventsStatus(payload.message || "Order cancelled.");
     await loadEvents();
     setCancellingOrderId(null);
+  };
+
+  async function loadCoupons() {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const accessToken = session?.access_token;
+
+    if (!accessToken) {
+      setCouponsStatus("Your session expired. Please sign in again.");
+      return;
+    }
+
+    const response = await fetch("/api/admin/coupons", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!response.ok) {
+      setCouponsStatus("Failed to load coupons.");
+      return;
+    }
+
+    const payload = await response.json();
+    setCoupons(payload.coupons || []);
+    setCouponsStatus("");
+  }
+
+  const handleOpenCouponModal = () => {
+    setCouponCode("");
+    setCouponDiscountType("dollar");
+    setCouponDiscountValue("");
+    setCouponExpiryDate("");
+    setCouponMaxUses("1");
+    setCouponFormStep("form");
+    setCouponsStatus("");
+    setCouponModalOpen(true);
+  };
+
+  const handleCloseCouponModal = () => {
+    if (!creatingCoupon) {
+      setCouponModalOpen(false);
+    }
+  };
+
+  const handleCreateCoupon = async () => {
+    const code = couponCode.trim().toUpperCase();
+
+    if (!code) {
+      setCouponsStatus("Coupon code is required.");
+      return;
+    }
+
+    if (!couponDiscountValue) {
+      setCouponsStatus("Discount value is required.");
+      return;
+    }
+
+    const value = Number(couponDiscountValue);
+    if (Number.isNaN(value) || value <= 0) {
+      setCouponsStatus("Discount value must be greater than 0.");
+      return;
+    }
+
+    if (couponDiscountType === "percentage" && value > 100) {
+      setCouponsStatus("Percentage discount cannot exceed 100%.");
+      return;
+    }
+
+    const maxUses = Number(couponMaxUses);
+    if (Number.isNaN(maxUses) || maxUses < 1) {
+      setCouponsStatus("Max uses must be at least 1.");
+      return;
+    }
+
+    setCouponFormStep("confirm");
+  };
+
+  const handleConfirmCreateCoupon = async () => {
+    setCreatingCoupon(true);
+    setCouponsStatus("");
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const accessToken = session?.access_token;
+
+    if (!accessToken) {
+      setCouponsStatus("Your session expired. Please sign in again.");
+      setCreatingCoupon(false);
+      return;
+    }
+
+    const response = await fetch("/api/admin/create-coupon", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        code: couponCode.trim().toUpperCase(),
+        discountType: couponDiscountType,
+        discountValue: Number(couponDiscountValue),
+        expiryDate: couponExpiryDate || null,
+        maxUsesPerUser: Number(couponMaxUses) || 1,
+      }),
+    });
+
+    const payload = await response.json();
+
+    if (!response.ok) {
+      setCouponsStatus(payload.error || "Failed to create coupon.");
+      setCreatingCoupon(false);
+      return;
+    }
+
+    setCouponsStatus("Coupon created successfully!");
+    setCouponModalOpen(false);
+    await loadCoupons();
+    setCreatingCoupon(false);
+  };
+
+  const handleViewCouponUsage = async (couponId: string) => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const accessToken = session?.access_token;
+
+    if (!accessToken) {
+      setCouponsStatus("Your session expired. Please sign in again.");
+      return;
+    }
+
+    const response = await fetch(`/api/admin/coupons/${couponId}/usage`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!response.ok) {
+      setCouponsStatus("Failed to load coupon usage.");
+      return;
+    }
+
+    const payload = await response.json();
+    setCouponUsage(payload);
+    setViewingCouponUsageId(couponId);
+  };
+
+  const handleDeleteCoupon = async (couponId: string) => {
+    const confirmed = window.confirm("Deactivate this coupon? It will no longer be usable.");
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingCouponId(couponId);
+    setCouponsStatus("");
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const accessToken = session?.access_token;
+
+    if (!accessToken) {
+      setCouponsStatus("Your session expired. Please sign in again.");
+      setDeletingCouponId(null);
+      return;
+    }
+
+    const response = await fetch("/api/admin/delete-coupon", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ couponId }),
+    });
+
+    const payload = await response.json();
+
+    if (!response.ok) {
+      setCouponsStatus(payload.error || "Failed to deactivate coupon.");
+      setDeletingCouponId(null);
+      return;
+    }
+
+    setCouponsStatus("Coupon deactivated.");
+    await loadCoupons();
+    setDeletingCouponId(null);
   };
 
   if (loading) {
@@ -1153,16 +1490,21 @@ export default function AdminPage() {
                             </p>
                             <p className="text-xs text-[color:var(--wasatch-blue)] mt-1">{toEventTypeLabel(item.event_type)}</p>
                           </div>
-                          <Button variant="outline" onClick={() => beginEdit(item)}>
-                            Edit Event
-                          </Button>
-                          <Button
-                            variant="outline"
-                            disabled={deletingEventId === item.id}
-                            onClick={() => handleDeleteEvent(item.id)}
-                          >
-                            {deletingEventId === item.id ? "Deleting..." : "Delete"}
-                          </Button>
+                          <div className="flex flex-wrap gap-2">
+                            <Button variant="outline" onClick={() => handleExportContacts(item.id)} disabled={exportingEventId === item.id}>
+                              {exportingEventId === item.id ? "Exporting..." : "Export Contacts"}
+                            </Button>
+                            <Button variant="outline" onClick={() => beginEdit(item)}>
+                              Edit Event
+                            </Button>
+                            <Button
+                              variant="outline"
+                              disabled={deletingEventId === item.id}
+                              onClick={() => handleDeleteEvent(item.id)}
+                            >
+                              {deletingEventId === item.id ? "Deleting..." : "Delete"}
+                            </Button>
+                          </div>
                         </div>
                         <p className="text-[color:var(--wasatch-gray)]">{item.description || "No description."}</p>
                         <div className="text-sm text-[color:var(--wasatch-gray)]">
@@ -1323,6 +1665,80 @@ export default function AdminPage() {
         </Card>
 
         <Card>
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h2 className="font-serif text-2xl font-bold text-[color:var(--wasatch-red)]">Coupon Management</h2>
+            <Button variant="secondary" onClick={handleOpenCouponModal}>
+              Create New Coupon
+            </Button>
+          </div>
+
+          {couponsStatus ? <p className="text-sm text-[color:var(--wasatch-blue)] mb-4">{couponsStatus}</p> : null}
+
+          {coupons.length === 0 ? (
+            <p className="text-[color:var(--wasatch-gray)]">No coupons created yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {coupons.map((coupon) => {
+                const discountDisplay =
+                  coupon.discountType === "percentage"
+                    ? `${coupon.discountValue}% off`
+                    : coupon.discountType === "bogo"
+                      ? `Buy 1 Get 1 Free`
+                      : `$${coupon.discountValue} off`;
+
+                const expiryDisplay = coupon.expiryDate
+                  ? format(parseISO(coupon.expiryDate), "MMM d, yyyy")
+                  : "No expiry";
+
+                const statusBadge = coupon.isExpired
+                  ? "Expired"
+                  : !coupon.isActive
+                    ? "Inactive"
+                    : "Active";
+                const statusColor = coupon.isExpired || !coupon.isActive ? "text-[color:var(--wasatch-red)]" : "text-green-600";
+
+                return (
+                  <div
+                    key={coupon.id}
+                    className="rounded-2xl border border-[color:var(--wasatch-gray)]/30 bg-white px-4 py-4 space-y-2"
+                  >
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                      <div>
+                        <h3 className="font-serif text-lg font-bold text-[color:var(--wasatch-blue)]">{coupon.code}</h3>
+                        <p className="text-sm text-[color:var(--wasatch-gray)]">{discountDisplay}</p>
+                        <p className="text-xs text-[color:var(--wasatch-gray)] mt-1">
+                          Expires: {expiryDisplay} | Max uses per user: {coupon.maxUsesPerUser}
+                        </p>
+                        <p className={`text-xs font-semibold mt-1 ${statusColor}`}>{statusBadge}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => handleViewCouponUsage(coupon.id)}
+                          className="text-sm"
+                        >
+                          View Usage
+                        </Button>
+                        {coupon.isActive && (
+                          <Button
+                            variant="outline"
+                            disabled={deletingCouponId === coupon.id}
+                            onClick={() => handleDeleteCoupon(coupon.id)}
+                            className="text-sm"
+                          >
+                            {deletingCouponId === coupon.id ? "Deactivating..." : "Deactivate"}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+
+        <Card>
           <h2 className="font-serif text-xl font-bold text-[color:var(--wasatch-red)] mb-3">Admin Access</h2>
           <p className="text-[color:var(--wasatch-gray)] text-sm mb-4">
             Add another admin by email or user UUID. This section sits below the event tools on purpose.
@@ -1354,21 +1770,35 @@ export default function AdminPage() {
             {testEmailStatus ? <p className="text-sm text-[color:var(--wasatch-blue)] mt-3">{testEmailStatus}</p> : null}
           </div>
 
-          <form onSubmit={handleAddAdmin} className="space-y-3 mb-4 max-w-2xl">
-            <label htmlFor="admin-identifier" className="block text-sm font-medium text-[color:var(--wasatch-gray)]">Add Admin by Email or UUID</label>
-            <input
-              id="admin-identifier"
-              name="adminIdentifier"
-              type="text"
-              value={adminUserIdInput}
-              onChange={(e) => setAdminUserIdInput(e.target.value)}
-              className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[color:var(--wasatch-blue)]"
-              placeholder="name@example.com or 00000000-0000-0000-0000-000000000000"
-            />
-            <Button type="submit" variant="primary" disabled={adminSaving}>
-              {adminSaving ? "Adding..." : "Add Admin"}
-            </Button>
-          </form>
+          <div className="grid gap-4 lg:grid-cols-2 mb-4">
+            <div className="rounded-2xl border border-[color:var(--wasatch-gray)]/30 bg-white p-4">
+              <form onSubmit={handleAddAdmin} className="space-y-3">
+                <label htmlFor="admin-identifier" className="block text-sm font-medium text-[color:var(--wasatch-gray)]">Add Admin by Email or UUID</label>
+                <input
+                  id="admin-identifier"
+                  name="adminIdentifier"
+                  type="text"
+                  value={adminUserIdInput}
+                  onChange={(e) => setAdminUserIdInput(e.target.value)}
+                  className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[color:var(--wasatch-blue)]"
+                  placeholder="name@example.com or user UUID"
+                />
+                <Button type="submit" variant="primary" disabled={adminSaving}>
+                  {adminSaving ? "Adding..." : "Add Admin"}
+                </Button>
+              </form>
+            </div>
+
+            <div className="rounded-2xl border border-[color:var(--wasatch-gray)]/30 bg-white p-4">
+              <h3 className="font-serif text-lg font-bold text-[color:var(--wasatch-blue)] mb-2">Export All Account Emails</h3>
+              <p className="text-sm text-[color:var(--wasatch-gray)] mb-3">
+                Download a spreadsheet of every Wasatch Mahjong account email.
+              </p>
+              <Button variant="secondary" onClick={handleExportAccountEmails} disabled={exportingAccounts}>
+                {exportingAccounts ? "Exporting..." : "Export Account Emails"}
+              </Button>
+            </div>
+          </div>
 
           {adminStatus ? <p className="text-sm text-[color:var(--wasatch-blue)] mb-3">{adminStatus}</p> : null}
 
@@ -1703,6 +2133,262 @@ export default function AdminPage() {
           </div>
         </div>
       ) : null}
+
+      {couponModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center px-4 z-50">
+          <Card className="w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-serif text-2xl font-bold text-[color:var(--wasatch-red)]">
+                {couponFormStep === "form" ? "Create New Coupon" : "Review Coupon"}
+              </h2>
+              {!creatingCoupon && (
+                <button
+                  onClick={handleCloseCouponModal}
+                  className="text-xl text-[color:var(--wasatch-gray)] hover:text-[color:var(--wasatch-red)]"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {couponsStatus && (
+              <div
+                className={`mb-4 p-3 rounded-lg text-sm ${
+                  couponsStatus.includes("success") || couponsStatus.includes("successfully")
+                    ? "bg-green-50 text-green-700"
+                    : "bg-red-50 text-red-700"
+                }`}
+              >
+                {couponsStatus}
+              </div>
+            )}
+
+            {couponFormStep === "form" ? (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleCreateCoupon();
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label htmlFor="coupon-code" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">
+                    Coupon Code *
+                  </label>
+                  <input
+                    id="coupon-code"
+                    type="text"
+                    placeholder="e.g., SAVE20"
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                    maxLength={20}
+                    disabled={creatingCoupon}
+                    className="w-full rounded-lg border border-[color:var(--wasatch-gray)] bg-white px-3 py-2 text-sm disabled:bg-gray-100"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="discount-type" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">
+                    Discount Type *
+                  </label>
+                  <select
+                    id="discount-type"
+                    value={couponDiscountType}
+                    onChange={(e) => setCouponDiscountType(e.target.value as "dollar" | "percentage" | "bogo")}
+                    disabled={creatingCoupon}
+                    className="w-full rounded-lg border border-[color:var(--wasatch-gray)] bg-white px-3 py-2 text-sm disabled:bg-gray-100"
+                  >
+                    <option value="dollar">Fixed Amount ($)</option>
+                    <option value="percentage">Percentage (%)</option>
+                    <option value="bogo">Buy 1 Get 1 Free</option>
+                  </select>
+                </div>
+
+                {couponDiscountType !== "bogo" && (
+                  <div>
+                    <label htmlFor="discount-value" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">
+                      {couponDiscountType === "percentage" ? "Percentage (1-100)" : "Dollar Amount"} *
+                    </label>
+                    <input
+                      id="discount-value"
+                      type="number"
+                      placeholder={couponDiscountType === "percentage" ? "e.g., 20" : "e.g., 5"}
+                      min="0.01"
+                      step={couponDiscountType === "percentage" ? "1" : "0.01"}
+                      value={couponDiscountValue}
+                      onChange={(e) => setCouponDiscountValue(e.target.value)}
+                      disabled={creatingCoupon}
+                      className="w-full rounded-lg border border-[color:var(--wasatch-gray)] bg-white px-3 py-2 text-sm disabled:bg-gray-100"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label htmlFor="expiry-date" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">
+                    Expiry Date (Optional)
+                  </label>
+                  <input
+                    id="expiry-date"
+                    type="date"
+                    value={couponExpiryDate}
+                    onChange={(e) => setCouponExpiryDate(e.target.value)}
+                    disabled={creatingCoupon}
+                    className="w-full rounded-lg border border-[color:var(--wasatch-gray)] bg-white px-3 py-2 text-sm disabled:bg-gray-100"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="max-uses" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">
+                    Times Per User *
+                  </label>
+                  <input
+                    id="max-uses"
+                    type="number"
+                    placeholder="e.g., 1"
+                    min="1"
+                    step="1"
+                    value={couponMaxUses}
+                    onChange={(e) => setCouponMaxUses(e.target.value)}
+                    disabled={creatingCoupon}
+                    className="w-full rounded-lg border border-[color:var(--wasatch-gray)] bg-white px-3 py-2 text-sm disabled:bg-gray-100"
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <Button type="submit" disabled={creatingCoupon} className="flex-1">
+                    Review
+                  </Button>
+                  <Button type="button" variant="outline" onClick={handleCloseCouponModal} disabled={creatingCoupon} className="flex-1">
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <div className="space-y-4">
+                <div className="bg-gray-50 p-3 rounded-lg space-y-2">
+                  <div>
+                    <p className="text-xs text-[color:var(--wasatch-gray)]">Code</p>
+                    <p className="font-semibold text-[color:var(--wasatch-blue)]">{couponCode}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-[color:var(--wasatch-gray)]">Discount</p>
+                    <p className="font-semibold">
+                      {couponDiscountType === "bogo"
+                        ? "Buy 1 Get 1 Free"
+                        : couponDiscountType === "percentage"
+                          ? `${couponDiscountValue}% off`
+                          : `$${couponDiscountValue} off`}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-[color:var(--wasatch-gray)]">Expires</p>
+                    <p className="font-semibold">
+                      {couponExpiryDate ? format(parseISO(couponExpiryDate), "MMM d, yyyy") : "No expiry"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-[color:var(--wasatch-gray)]">Max Uses Per User</p>
+                    <p className="font-semibold">{couponMaxUses}</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button type="button" disabled={creatingCoupon} onClick={handleConfirmCreateCoupon} className="flex-1">
+                    {creatingCoupon ? "Creating..." : "Create Coupon"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={creatingCoupon}
+                    onClick={() => setCouponFormStep("form")}
+                    className="flex-1"
+                  >
+                    Back
+                  </Button>
+                </div>
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {viewingCouponUsageId && couponUsage && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center px-4 z-50">
+          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-serif text-2xl font-bold text-[color:var(--wasatch-red)]">
+                Coupon Usage: {couponUsage.coupon.code}
+              </h2>
+              <button
+                onClick={() => {
+                  setViewingCouponUsageId(null);
+                  setCouponUsage(null);
+                }}
+                className="text-xl text-[color:var(--wasatch-gray)] hover:text-[color:var(--wasatch-red)]"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mb-4 p-3 rounded-lg bg-gray-50">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-[color:var(--wasatch-gray)]">Discount Type</p>
+                  <p className="font-semibold text-[color:var(--wasatch-blue)]">{couponUsage.coupon.discountType}</p>
+                </div>
+                <div>
+                  <p className="text-[color:var(--wasatch-gray)]">Discount Value</p>
+                  <p className="font-semibold text-[color:var(--wasatch-blue)]">{couponUsage.coupon.discountValue}</p>
+                </div>
+              </div>
+            </div>
+
+            {couponUsage.usage.length === 0 ? (
+              <p className="text-[color:var(--wasatch-gray)]">This coupon has not been used yet.</p>
+            ) : (
+              <div className="space-y-3">
+                <h3 className="font-semibold text-[color:var(--wasatch-blue)]">Usage Details</h3>
+                {couponUsage.usage.map((usage, idx) => (
+                  <div key={idx} className="rounded-lg border border-[color:var(--wasatch-gray)]/30 bg-white p-3 text-sm">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <p className="text-[color:var(--wasatch-gray)]">User ID</p>
+                        <p className="font-mono text-xs break-all">{usage.userId}</p>
+                      </div>
+                      <div>
+                        <p className="text-[color:var(--wasatch-gray)]">Used At</p>
+                        <p>{format(parseISO(usage.usedAt), "MMM d, yyyy • HH:mm")}</p>
+                      </div>
+                      <div>
+                        <p className="text-[color:var(--wasatch-gray)]">Discount Amount</p>
+                        <p className="font-semibold">${usage.discountAmount.toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[color:var(--wasatch-gray)]">Order ID</p>
+                        <p className="font-mono text-xs">{usage.orderId || "N/A"}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-4 pt-4 border-t border-[color:var(--wasatch-gray)]/20">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setViewingCouponUsageId(null);
+                  setCouponUsage(null);
+                }}
+                className="w-full"
+              >
+                Close
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
     </main>
   );
 }
