@@ -6,6 +6,8 @@ type CouponRow = {
   code: string;
   discount_type: string;
   discount_value: number;
+  bogo_buy_quantity: number;
+  bogo_get_quantity: number;
   expiry_date: string | null;
   max_uses_per_user: number;
   is_active: boolean;
@@ -42,7 +44,7 @@ export async function GET(req: NextRequest) {
 
   const { data: coupons, error } = await supabaseAdmin
     .from("coupons")
-    .select("id, code, discount_type, discount_value, expiry_date, max_uses_per_user, is_active, created_at")
+    .select("id, code, discount_type, discount_value, bogo_buy_quantity, bogo_get_quantity, expiry_date, max_uses_per_user, is_active, created_at")
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -59,6 +61,8 @@ export async function GET(req: NextRequest) {
       code: coupon.code,
       discountType: coupon.discount_type,
       discountValue: coupon.discount_value,
+      bogoBuyQuantity: coupon.bogo_buy_quantity || 1,
+      bogoGetQuantity: coupon.bogo_get_quantity || 1,
       expiryDate: coupon.expiry_date,
       maxUsesPerUser: coupon.max_uses_per_user,
       isActive: isActiveStatus,

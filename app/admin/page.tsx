@@ -68,6 +68,8 @@ type Coupon = {
   code: string;
   discountType: "dollar" | "percentage" | "bogo";
   discountValue: number;
+  bogoBuyQuantity: number;
+  bogoGetQuantity: number;
   expiryDate: string | null;
   maxUsesPerUser: number;
   isActive: boolean;
@@ -210,6 +212,8 @@ export default function AdminPage() {
   const [couponCode, setCouponCode] = useState("");
   const [couponDiscountType, setCouponDiscountType] = useState<"dollar" | "percentage" | "bogo">("dollar");
   const [couponDiscountValue, setCouponDiscountValue] = useState("");
+  const [couponBogoBuyQuantity, setCouponBogoBuyQuantity] = useState("1");
+  const [couponBogoGetQuantity, setCouponBogoGetQuantity] = useState("1");
   const [couponExpiryDate, setCouponExpiryDate] = useState("");
   const [couponMaxUses, setCouponMaxUses] = useState("1");
   const [creatingCoupon, setCreatingCoupon] = useState(false);
@@ -1135,6 +1139,8 @@ export default function AdminPage() {
     setCouponCode("");
     setCouponDiscountType("dollar");
     setCouponDiscountValue("");
+    setCouponBogoBuyQuantity("1");
+    setCouponBogoGetQuantity("1");
     setCouponExpiryDate("");
     setCouponMaxUses("1");
     setCouponFormStep("form");
@@ -1156,20 +1162,37 @@ export default function AdminPage() {
       return;
     }
 
-    if (!couponDiscountValue) {
-      setCouponsStatus("Discount value is required.");
-      return;
-    }
+    if (couponDiscountType === "bogo") {
+      const buyQty = Number(couponBogoBuyQuantity);
+      const getQty = Number(couponBogoGetQuantity);
 
-    const value = Number(couponDiscountValue);
-    if (Number.isNaN(value) || value <= 0) {
-      setCouponsStatus("Discount value must be greater than 0.");
-      return;
-    }
+      if (!Number.isInteger(buyQty) || buyQty < 1) {
+        setCouponsStatus("Buy quantity must be a whole number of at least 1.");
+        return;
+      }
 
-    if (couponDiscountType === "percentage" && value > 100) {
-      setCouponsStatus("Percentage discount cannot exceed 100%.");
-      return;
+      if (!Number.isInteger(getQty) || getQty < 1) {
+        setCouponsStatus("Get quantity must be a whole number of at least 1.");
+        return;
+      }
+    } else {
+      if (!couponDiscountValue) {
+        setCouponsStatus("Discount value is required.");
+        return;
+      }
+
+      const value = Number(couponDiscountValue);
+      if (Number.isNaN(value) || value <= 0) {
+        setCouponsStatus("Discount value must be greater than 0.");
+        return;
+      }
+
+      if (couponDiscountType === "percentage") {
+        if (!Number.isInteger(value) || value < 1 || value > 100) {
+          setCouponsStatus("Percentage discount must be a whole number from 1 to 100.");
+          return;
+        }
+      }
     }
 
     const maxUses = Number(couponMaxUses);
@@ -1205,7 +1228,9 @@ export default function AdminPage() {
       body: JSON.stringify({
         code: couponCode.trim().toUpperCase(),
         discountType: couponDiscountType,
-        discountValue: Number(couponDiscountValue),
+        discountValue: couponDiscountType === "bogo" ? 1 : Number(couponDiscountValue),
+        bogoBuyQuantity: couponDiscountType === "bogo" ? Number(couponBogoBuyQuantity) : 1,
+        bogoGetQuantity: couponDiscountType === "bogo" ? Number(couponBogoGetQuantity) : 1,
         expiryDate: couponExpiryDate || null,
         maxUsesPerUser: Number(couponMaxUses) || 1,
       }),
@@ -1683,7 +1708,7 @@ export default function AdminPage() {
                   coupon.discountType === "percentage"
                     ? `${coupon.discountValue}% off`
                     : coupon.discountType === "bogo"
-                      ? `Buy 1 Get 1 Free`
+                      ? `Buy ${coupon.bogoBuyQuantity} Get ${coupon.bogoGetQuantity}`
                       : `$${coupon.discountValue} off`;
 
                 const expiryDisplay = coupon.expiryDate
@@ -2194,13 +2219,19 @@ export default function AdminPage() {
                   <select
                     id="discount-type"
                     value={couponDiscountType}
-                    onChange={(e) => setCouponDiscountType(e.target.value as "dollar" | "percentage" | "bogo")}
+                    onChange={(e) => {
+                      const nextType = e.target.value as "dollar" | "percentage" | "bogo";
+                      setCouponDiscountType(nextType);
+                      if (nextType === "percentage") {
+                        setCouponDiscountValue("");
+                      }
+                    }}
                     disabled={creatingCoupon}
                     className="w-full rounded-lg border border-[color:var(--wasatch-gray)] bg-white px-3 py-2 text-sm disabled:bg-gray-100"
                   >
                     <option value="dollar">Fixed Amount ($)</option>
                     <option value="percentage">Percentage (%)</option>
-                    <option value="bogo">Buy 1 Get 1 Free</option>
+                    <option value="bogo">Buy X Get Y</option>
                   </select>
                 </div>
 
@@ -2213,13 +2244,49 @@ export default function AdminPage() {
                       id="discount-value"
                       type="number"
                       placeholder={couponDiscountType === "percentage" ? "e.g., 20" : "e.g., 5"}
-                      min="0.01"
+                      min={couponDiscountType === "percentage" ? "1" : "0.01"}
+                      max={couponDiscountType === "percentage" ? "100" : undefined}
                       step={couponDiscountType === "percentage" ? "1" : "0.01"}
                       value={couponDiscountValue}
                       onChange={(e) => setCouponDiscountValue(e.target.value)}
                       disabled={creatingCoupon}
                       className="w-full rounded-lg border border-[color:var(--wasatch-gray)] bg-white px-3 py-2 text-sm disabled:bg-gray-100"
                     />
+                  </div>
+                )}
+
+                {couponDiscountType === "bogo" && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label htmlFor="bogo-buy-quantity" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">
+                        Buy Quantity *
+                      </label>
+                      <input
+                        id="bogo-buy-quantity"
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={couponBogoBuyQuantity}
+                        onChange={(e) => setCouponBogoBuyQuantity(e.target.value)}
+                        disabled={creatingCoupon}
+                        className="w-full rounded-lg border border-[color:var(--wasatch-gray)] bg-white px-3 py-2 text-sm disabled:bg-gray-100"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="bogo-get-quantity" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">
+                        Get Quantity *
+                      </label>
+                      <input
+                        id="bogo-get-quantity"
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={couponBogoGetQuantity}
+                        onChange={(e) => setCouponBogoGetQuantity(e.target.value)}
+                        disabled={creatingCoupon}
+                        className="w-full rounded-lg border border-[color:var(--wasatch-gray)] bg-white px-3 py-2 text-sm disabled:bg-gray-100"
+                      />
+                    </div>
                   </div>
                 )}
 
@@ -2274,7 +2341,7 @@ export default function AdminPage() {
                     <p className="text-xs text-[color:var(--wasatch-gray)]">Discount</p>
                     <p className="font-semibold">
                       {couponDiscountType === "bogo"
-                        ? "Buy 1 Get 1 Free"
+                        ? `Buy ${couponBogoBuyQuantity} Get ${couponBogoGetQuantity}`
                         : couponDiscountType === "percentage"
                           ? `${couponDiscountValue}% off`
                           : `$${couponDiscountValue} off`}

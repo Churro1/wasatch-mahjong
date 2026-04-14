@@ -33,10 +33,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Admin access required." }, { status: 403 });
   }
 
-  const { code, discountType, discountValue, expiryDate, maxUsesPerUser } = await req.json();
+  const {
+    code,
+    discountType,
+    discountValue,
+    bogoBuyQuantity,
+    bogoGetQuantity,
+    expiryDate,
+    maxUsesPerUser,
+  } = await req.json();
   const normalizedCode = typeof code === "string" ? code.trim().toUpperCase() : "";
   const normalizedType = typeof discountType === "string" ? discountType.trim() : "";
   const parsedValue = Number(discountValue);
+  const parsedBogoBuyQuantity = Number(bogoBuyQuantity) || 1;
+  const parsedBogoGetQuantity = Number(bogoGetQuantity) || 1;
   const parsedMaxUses = Number(maxUsesPerUser) || 1;
 
   if (!normalizedCode) {
@@ -50,15 +60,33 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  if (Number.isNaN(parsedValue) || parsedValue <= 0) {
-    return NextResponse.json({ error: "Discount value must be greater than 0." }, { status: 400 });
-  }
+  if (normalizedType === "bogo") {
+    if (!Number.isInteger(parsedBogoBuyQuantity) || parsedBogoBuyQuantity < 1) {
+      return NextResponse.json(
+        { error: "Buy quantity must be a whole number of at least 1." },
+        { status: 400 }
+      );
+    }
 
-  if (normalizedType === "percentage" && parsedValue > 100) {
-    return NextResponse.json(
-      { error: "Percentage discount cannot exceed 100%." },
-      { status: 400 }
-    );
+    if (!Number.isInteger(parsedBogoGetQuantity) || parsedBogoGetQuantity < 1) {
+      return NextResponse.json(
+        { error: "Get quantity must be a whole number of at least 1." },
+        { status: 400 }
+      );
+    }
+  } else {
+    if (Number.isNaN(parsedValue) || parsedValue <= 0) {
+      return NextResponse.json({ error: "Discount value must be greater than 0." }, { status: 400 });
+    }
+
+    if (normalizedType === "percentage") {
+      if (!Number.isInteger(parsedValue) || parsedValue < 1 || parsedValue > 100) {
+        return NextResponse.json(
+          { error: "Percentage discount must be a whole number from 1 to 100." },
+          { status: 400 }
+        );
+      }
+    }
   }
 
   if (Number.isNaN(parsedMaxUses) || parsedMaxUses < 1) {
@@ -79,7 +107,9 @@ export async function POST(req: NextRequest) {
   const { data, error } = await supabaseAdmin.from("coupons").insert({
     code: normalizedCode,
     discount_type: normalizedType,
-    discount_value: parsedValue,
+    discount_value: normalizedType === "bogo" ? 1 : parsedValue,
+    bogo_buy_quantity: normalizedType === "bogo" ? parsedBogoBuyQuantity : 1,
+    bogo_get_quantity: normalizedType === "bogo" ? parsedBogoGetQuantity : 1,
     expiry_date: expiryDateIso,
     max_uses_per_user: parsedMaxUses,
     created_by: user.id,
@@ -94,7 +124,9 @@ export async function POST(req: NextRequest) {
     coupon: {
       code: normalizedCode,
       discountType: normalizedType,
-      discountValue: parsedValue,
+      discountValue: normalizedType === "bogo" ? 1 : parsedValue,
+      bogoBuyQuantity: normalizedType === "bogo" ? parsedBogoBuyQuantity : 1,
+      bogoGetQuantity: normalizedType === "bogo" ? parsedBogoGetQuantity : 1,
       expiryDate: expiryDateIso,
       maxUsesPerUser: parsedMaxUses,
     },

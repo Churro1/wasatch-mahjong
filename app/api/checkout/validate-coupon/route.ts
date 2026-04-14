@@ -6,6 +6,8 @@ type CouponRow = {
   code: string;
   discount_type: string;
   discount_value: number;
+  bogo_buy_quantity: number;
+  bogo_get_quantity: number;
   expiry_date: string | null;
   is_active: boolean;
 };
@@ -27,7 +29,7 @@ export async function POST(req: NextRequest) {
 
   const { data: coupon, error: couponError } = await supabaseAdmin
     .from("coupons")
-    .select("id, code, discount_type, discount_value, expiry_date, is_active")
+    .select("id, code, discount_type, discount_value, bogo_buy_quantity, bogo_get_quantity, expiry_date, is_active")
     .eq("code", normalizedCode)
     .maybeSingle();
 
@@ -55,8 +57,10 @@ export async function POST(req: NextRequest) {
   } else if (coupon.discount_type === "percentage") {
     discountAmount = (coupon.discount_value / 100) * parsedPrice;
   } else if (coupon.discount_type === "bogo") {
-    // Buy 1 Get 1 Free - discount is 50% of price
-    discountAmount = parsedPrice * 0.5;
+    const buyQty = coupon.bogo_buy_quantity || 1;
+    const getQty = coupon.bogo_get_quantity || 1;
+    const totalQty = buyQty + getQty;
+    discountAmount = totalQty > 0 ? parsedPrice * (getQty / totalQty) : 0;
   }
 
   return NextResponse.json({
@@ -64,6 +68,8 @@ export async function POST(req: NextRequest) {
       code: coupon.code,
       discountType: coupon.discount_type,
       discountValue: coupon.discount_value,
+      bogoBuyQuantity: coupon.bogo_buy_quantity || 1,
+      bogoGetQuantity: coupon.bogo_get_quantity || 1,
       discountAmount: Number(discountAmount.toFixed(2)),
     },
   });
