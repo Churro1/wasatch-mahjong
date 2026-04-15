@@ -52,7 +52,7 @@ export function Footer() {
         </Link>
         {/* Address */}
         <div className="text-center md:text-left text-[color:var(--wasatch-gray)] text-sm">
-          3939 S Wasatch Dr, Salt Lake City, UT 84124
+          3939 S Wasatch Blvd, Salt Lake City, UT 84124
         </div>
         {/* Helpful Links */}
         <nav className="flex flex-col md:flex-row gap-2 md:gap-6 text-[color:var(--wasatch-blue)] font-sans text-base font-medium">

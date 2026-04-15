@@ -8,7 +8,7 @@ const faqs = [
   {
     question: "Where do I park for events?",
     answer:
-      "Free parking is available onsite at 3939 S Wasatch Dr, Salt Lake City, UT 84124. Please arrive 10-15 minutes early.",
+      "Parking is available in the lot adjacent to the building. Street parking may also be available.",
   },
   {
     question: "Do I need to bring Mahjong tiles?",
@@ -18,7 +18,7 @@ const faqs = [
   {
     question: "What is your cancellation policy?",
     answer:
-      "Cancel from your dashboard at least 24 hours before the event to receive a refund minus the $10 cancellation fee.",
+      "Cancel from your dashboard at least 24 hours before the event to receive a refund minus a $10 cancellation fee.",
   },
 ];
 
