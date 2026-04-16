@@ -14,7 +14,7 @@ type AdminUser = {
   created_by: string | null;
 };
 
-type EventTypeValue = "class" | "open_play" | "custom" | "guided_play";
+type EventTypeValue = "class" | "open_play" | "guided_play" |"custom";
 
 type ManagedEvent = {
   id: string;
@@ -109,6 +109,9 @@ function toEventTypeLabel(type: EventTypeValue | null): string {
   }
   if (type === "open_play") {
     return "Open Play";
+  }
+  if (type === "guided_play") {
+    return "Guided Play";
   }
   return "Custom";
 }
@@ -1389,6 +1392,7 @@ export default function AdminPage() {
                 >
                   <option value="class">Class</option>
                   <option value="open_play">Open Play</option>
+                  <option value="guided_play">Guided Play</option>
                   <option value="custom">Custom</option>
                 </select>
               </div>
@@ -1858,6 +1862,7 @@ export default function AdminPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <Button variant="primary" onClick={() => selectCreateType("class")}>Class</Button>
                     <Button variant="secondary" onClick={() => selectCreateType("open_play")}>Open Play</Button>
+                    <Button variant="secondary" onClick={() => selectCreateType("guided_play")}>Guided Play</Button>
                     <Button variant="outline" onClick={() => selectCreateType("custom")}>Custom</Button>
                   </div>
 
