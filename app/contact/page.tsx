@@ -8,7 +8,7 @@ const faqs = [
   {
     question: "Where do I park for events?",
     answer:
-      "Parking is available in the lot adjacent to the building. Street parking may also be available.",
+      "In true underground fashion… park in the lower Einstein Bagel parking lot. Walk through the Sinclair lot past the car wash. We are down the steps at the east end. If you pass the tires, you’ve gone too far.",
   },
   {
     question: "Do I need to bring Mahjong tiles?",

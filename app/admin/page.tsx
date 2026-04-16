@@ -14,7 +14,7 @@ type AdminUser = {
   created_by: string | null;
 };
 
-type EventTypeValue = "class" | "open_play" | "custom";
+type EventTypeValue = "class" | "open_play" | "custom" | "guided_play";
 
 type ManagedEvent = {
   id: string;
