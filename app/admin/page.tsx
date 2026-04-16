@@ -37,6 +37,9 @@ type ManagedEvent = {
     signup_status: string;
   }>;
 };
+type ManagedEventRow = Omit<ManagedEvent, "price"> & {
+  price: string | number;
+};
 
 type EventPreset = {
   id: string;
@@ -48,6 +51,10 @@ type EventPreset = {
   default_capacity: number;
   is_active: boolean;
   created_at: string;
+};
+type EventPresetRow = Omit<EventPreset, "default_price" | "default_capacity"> & {
+  default_price: string | number;
+  default_capacity: string | number;
 };
 
 type CreateFormValues = {
@@ -100,6 +107,7 @@ const DAY_OPTIONS: Array<{ value: number; label: string }> = [
 const TYPE_DEFAULT_TITLES: Record<EventTypeValue, string> = {
   class: "Mahjong Class",
   open_play: "Open Play",
+  guided_play: "Guided Play",
   custom: "Special Mahjong Event",
 };
 
@@ -263,7 +271,7 @@ export default function AdminPage() {
       return;
     }
 
-    const normalized = (data || []).map((row) => ({
+    const normalized = (data || []).map((row: ManagedEventRow): ManagedEvent => ({
       ...row,
       price: Number(row.price),
     }));
@@ -284,7 +292,7 @@ export default function AdminPage() {
       return;
     }
 
-    const normalized = (data || []).map((row) => ({
+    const normalized = (data || []).map((row: EventPresetRow) => ({
       ...row,
       default_price: Number(row.default_price),
       default_capacity: Number(row.default_capacity),
