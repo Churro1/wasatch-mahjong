@@ -51,21 +51,23 @@ function EventCard({ event }: { event: EventItem }) {
   const isFull = spotsLeft === 0;
 
   return (
-    <Card>
-      <div className="space-y-2">
-        <div className="flex justify-between items-start">
-          <div>
-            <h3 className="font-serif text-lg font-bold text-[color:var(--wasatch-blue)]">{event.title}</h3>
-            <p className="text-sm text-[color:var(--wasatch-gray)]">{event.type}</p>
+    <Link href={`/checkout?eventId=${encodeURIComponent(event.id)}`} className="block">
+      <Card className="transition hover:shadow-lg cursor-pointer">
+        <div className="space-y-2">
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="font-serif text-lg font-bold text-[color:var(--wasatch-blue)]">{event.title}</h3>
+              <p className="text-sm text-[color:var(--wasatch-gray)]">{event.type}</p>
+            </div>
+            <span className={`text-sm font-semibold px-2 py-1 rounded ${isFull ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}>
+              {isFull ? "Full" : `${spotsLeft} spots`}
+            </span>
           </div>
-          <span className={`text-sm font-semibold px-2 py-1 rounded ${isFull ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}>
-            {isFull ? "Full" : `${spotsLeft} spots`}
-          </span>
+          <p className="text-sm text-[color:var(--wasatch-gray)]">{event.date} at {event.time}</p>
+          <p className="text-sm text-[color:var(--wasatch-gray)]">${event.price.toFixed(2)}</p>
         </div>
-        <p className="text-sm text-[color:var(--wasatch-gray)]">{event.date} at {event.time}</p>
-        <p className="text-sm text-[color:var(--wasatch-gray)]">${event.price.toFixed(2)}</p>
-      </div>
-    </Card>
+      </Card>
+    </Link>
   );
 }
 
