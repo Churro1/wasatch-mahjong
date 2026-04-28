@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
-function isUuid(value: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
-}
-
 export async function POST(req: NextRequest) {
   const supabaseAdmin = getSupabaseAdmin();
   const authorization = req.headers.get("authorization");
@@ -104,7 +100,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const { data, error } = await supabaseAdmin.from("coupons").insert({
+  const { error } = await supabaseAdmin.from("coupons").insert({
     code: normalizedCode,
     discount_type: normalizedType,
     discount_value: normalizedType === "bogo" ? 1 : parsedValue,

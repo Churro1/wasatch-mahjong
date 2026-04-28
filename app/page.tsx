@@ -103,9 +103,14 @@ export default function Home() {
         <p className="max-w-xl text-lg md:text-xl text-[color:var(--wasatch-gray)] mb-8 font-sans">
           Salt Lake City&apos;s friendliest American Mahjong club. Join us for open play nights, fun classes, and a warm, welcoming community!
         </p>
-        <Link href="/events">
-          <Button variant="primary" className="text-lg px-8 py-3 shadow-lg">View Events</Button>
-        </Link>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <Link href="/events">
+            <Button variant="primary" className="text-lg px-8 py-3 shadow-lg">View Events</Button>
+          </Link>
+          <Link href="/gift-cards">
+            <Button variant="outline" className="text-lg px-8 py-3">Buy Gift Card</Button>
+          </Link>
+        </div>
       </section>
 
       {/* Upcoming Events Section */}

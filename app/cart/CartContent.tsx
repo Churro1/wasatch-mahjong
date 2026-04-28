@@ -53,6 +53,14 @@ type AppliedCoupon = {
   bogoGetQuantity?: number;
 };
 
+type AppliedGiftCard = {
+  code: string;
+  remainingAmount: number;
+  availableAmount: number;
+  appliedAmount: number;
+  currency: string;
+};
+
 const MAX_ATTENDEES = 4;
 
 function toCartTypeLabel(type: CartEvent["event_type"]): string {
@@ -98,6 +106,10 @@ export default function CartContent() {
   const [couponError, setCouponError] = useState("");
   const [applyingCoupon, setApplyingCoupon] = useState(false);
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
+  const [giftCardCode, setGiftCardCode] = useState("");
+  const [giftCardError, setGiftCardError] = useState("");
+  const [applyingGiftCard, setApplyingGiftCard] = useState(false);
+  const [appliedGiftCard, setAppliedGiftCard] = useState<AppliedGiftCard | null>(null);
 
   const cartPath = useMemo(() => {
     if (!eventId) {
@@ -154,9 +166,21 @@ export default function CartContent() {
     return Math.min(subtotal, boundedFreeSpots * event.price);
   }, [appliedCoupon, attendees.length, event, subtotal]);
 
-  const totalAfterDiscount = useMemo(() => {
+  const totalAfterCoupon = useMemo(() => {
     return Math.max(0, subtotal - discountAmount);
-  }, [subtotal, discountAmount]);
+  }, [discountAmount, subtotal]);
+
+  const giftCardAmount = useMemo(() => {
+    if (!appliedGiftCard || totalAfterCoupon <= 0) {
+      return 0;
+    }
+
+    return Math.min(totalAfterCoupon, appliedGiftCard.availableAmount);
+  }, [appliedGiftCard, totalAfterCoupon]);
+
+  const totalAfterDiscount = useMemo(() => {
+    return Math.max(0, totalAfterCoupon - giftCardAmount);
+  }, [giftCardAmount, totalAfterCoupon]);
 
   useEffect(() => {
     async function loadCart() {
@@ -411,6 +435,69 @@ export default function CartContent() {
     setApplyingCoupon(false);
   };
 
+  const handleApplyGiftCard = async () => {
+    const normalizedCode = giftCardCode.trim().toUpperCase();
+    if (!normalizedCode) {
+      setGiftCardError("Please enter a gift card code.");
+      return;
+    }
+
+    if (!event || attendees.length <= 0) {
+      setGiftCardError("Add at least one attendee before applying a gift card.");
+      return;
+    }
+
+    setApplyingGiftCard(true);
+    setGiftCardError("");
+
+    try {
+      const response = await fetch("/api/checkout/validate-gift-card", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          giftCardCode: normalizedCode,
+          orderTotal: totalAfterCoupon,
+        }),
+      });
+
+      const payload = (await response.json()) as {
+        error?: string;
+        giftCard?: {
+          code: string;
+          remainingAmount: number;
+          availableAmount: number;
+          appliedAmount: number;
+          currency: string;
+        };
+      };
+
+      if (!response.ok || !payload.giftCard) {
+        setGiftCardError(payload.error || "Unable to apply this gift card.");
+        setAppliedGiftCard(null);
+        setApplyingGiftCard(false);
+        return;
+      }
+
+      setAppliedGiftCard(payload.giftCard);
+      setGiftCardCode(payload.giftCard.code);
+      setGiftCardError("");
+      setStatusMessage("Gift card applied.");
+    } catch {
+      setGiftCardError("We could not validate that gift card. Please try again.");
+      setAppliedGiftCard(null);
+    }
+
+    setApplyingGiftCard(false);
+  };
+
+  const handleRemoveGiftCard = () => {
+    setAppliedGiftCard(null);
+    setGiftCardCode("");
+    setGiftCardError("");
+  };
+
   const handleRemoveCoupon = () => {
     setAppliedCoupon(null);
     setCouponCode("");
@@ -576,6 +663,7 @@ export default function CartContent() {
         orderId,
         offerToken: offerToken || undefined,
         couponCode: appliedCoupon?.code || undefined,
+        giftCardCode: appliedGiftCard?.code || undefined,
       }),
     });
 
@@ -758,7 +846,7 @@ export default function CartContent() {
                     <span>Spots Remaining</span>
                     <span>{event.spots_remaining ?? "-"}</span>
                   </div>
-                  {appliedCoupon ? (
+                  {appliedCoupon || appliedGiftCard ? (
                     <>
                       <div className="flex items-center justify-between">
                         <span>Subtotal</span>
@@ -769,6 +857,12 @@ export default function CartContent() {
                         <span>- ${discountAmount.toFixed(2)}</span>
                       </div>
                     </>
+                  ) : null}
+                  {appliedGiftCard ? (
+                    <div className="flex items-center justify-between text-green-700">
+                      <span>Gift Card ({appliedGiftCard.code})</span>
+                      <span>- ${giftCardAmount.toFixed(2)}</span>
+                    </div>
                   ) : null}
                   <div className="flex items-center justify-between text-lg font-semibold text-[color:var(--wasatch-blue)] pt-2">
                     <span>Total</span>
@@ -815,6 +909,45 @@ export default function CartContent() {
                     </div>
                   ) : null}
                   {couponError ? <p className="text-sm text-[color:var(--wasatch-red)]">{couponError}</p> : null}
+                </div>
+
+                <div className="rounded-2xl border border-[color:var(--wasatch-gray)]/30 bg-white p-4 space-y-2">
+                  <label htmlFor="cart-gift-card-code" className="block text-sm font-medium text-[color:var(--wasatch-gray)]">
+                    Gift Card Code
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      id="cart-gift-card-code"
+                      name="cartGiftCardCode"
+                      type="text"
+                      value={giftCardCode}
+                      onChange={(e) => {
+                        setGiftCardCode(e.target.value.toUpperCase());
+                        setGiftCardError("");
+                      }}
+                      placeholder="Enter gift card code"
+                      className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2"
+                      maxLength={24}
+                      disabled={applyingGiftCard}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleApplyGiftCard}
+                      disabled={applyingGiftCard || !giftCardCode.trim()}
+                    >
+                      {applyingGiftCard ? "Applying..." : "Apply"}
+                    </Button>
+                  </div>
+                  {appliedGiftCard ? (
+                    <div className="flex items-center justify-between text-sm text-green-700">
+                      <span>Applied: {appliedGiftCard.code}</span>
+                      <button type="button" onClick={handleRemoveGiftCard} className="underline">
+                        Remove
+                      </button>
+                    </div>
+                  ) : null}
+                  {giftCardError ? <p className="text-sm text-[color:var(--wasatch-red)]">{giftCardError}</p> : null}
                 </div>
 
                 <div className="pt-2 flex flex-col gap-3">

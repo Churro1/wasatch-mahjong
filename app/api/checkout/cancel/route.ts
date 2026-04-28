@@ -172,6 +172,14 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       );
     }
+
+    const { error: giftCardReversalError } = await supabaseAdmin.rpc("reverse_gift_card_redemptions", {
+      p_order_id: order.id,
+    });
+
+    if (giftCardReversalError) {
+      return NextResponse.json({ error: giftCardReversalError.message }, { status: 500 });
+    }
   }
 
   const nowIso = new Date().toISOString();

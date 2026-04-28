@@ -24,9 +24,21 @@ type SummaryResponse = {
   id: string;
   status: string;
   totalAmount: number;
+  type: "event" | "gift_card";
   confirmationEmailSentAt: string | null;
-  attendees: SummaryAttendee[];
-  event: SummaryEvent | null;
+  attendees?: SummaryAttendee[];
+  event?: SummaryEvent | null;
+  giftCardAmount?: number;
+  giftCard?: {
+    id: string;
+    code: string;
+    original_amount: number;
+    remaining_amount: number;
+    recipient_name: string | null;
+    recipient_email: string | null;
+    message: string | null;
+    email_sent_at: string | null;
+  };
 };
 
 export default function SuccessContent() {
@@ -102,7 +114,7 @@ export default function SuccessContent() {
           </Card>
         ) : null}
 
-        {!loading && !error && summary && summary.event ? (
+        {!loading && !error && summary && summary.type === "event" && summary.event ? (
           <>
             <Card>
               <h2 className="font-serif text-2xl font-bold text-[color:var(--wasatch-red)] mb-4">Order Summary</h2>
@@ -124,6 +136,12 @@ export default function SuccessContent() {
                     <span>Total Paid</span>
                     <span>${(summary.totalAmount / 100).toFixed(2)}</span>
                   </div>
+                  {summary.giftCardAmount && summary.giftCardAmount > 0 ? (
+                    <div className="flex items-center justify-between text-sm text-green-700">
+                      <span>Gift Card Applied</span>
+                      <span>- ${(summary.giftCardAmount / 100).toFixed(2)}</span>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </Card>
@@ -161,6 +179,68 @@ export default function SuccessContent() {
               <div className="pt-4 flex flex-col sm:flex-row gap-3">
                 <Link href="/dashboard">
                   <Button variant="primary">Go to Dashboard</Button>
+                </Link>
+                <Link href="/events">
+                  <Button variant="outline">Back to Events</Button>
+                </Link>
+              </div>
+            </Card>
+          </>
+        ) : null}
+
+        {!loading && !error && summary && summary.type === "gift_card" && summary.giftCard ? (
+          <>
+            <Card>
+              <h2 className="font-serif text-2xl font-bold text-[color:var(--wasatch-red)] mb-4">Gift Card Purchase</h2>
+              <div className="space-y-3 text-[color:var(--wasatch-gray)]">
+                <div className="rounded-2xl border border-[color:var(--wasatch-gray)]/30 bg-white p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span>Status</span>
+                    <span className="font-medium capitalize">{summary.status.replace(/_/g, " ")}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Gift Card Amount</span>
+                    <span>${(summary.totalAmount / 100).toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-lg font-semibold text-[color:var(--wasatch-blue)]">
+                    <span>Code</span>
+                    <span className="font-mono text-base">{summary.giftCard.code}</span>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-[color:var(--wasatch-gray)]/30 bg-white p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span>Recipient</span>
+                    <span>{summary.giftCard.recipient_name || "Not specified"}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Email</span>
+                    <span>{summary.giftCard.recipient_email || "Not specified"}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm text-[color:var(--wasatch-gray)]">
+                    <span>Remaining Balance</span>
+                    <span>${(summary.giftCard.remaining_amount / 100).toFixed(2)}</span>
+                  </div>
+                </div>
+
+                {summary.giftCard.message ? (
+                  <div className="rounded-2xl bg-white border border-[color:var(--wasatch-gray)]/30 p-4">
+                    <p className="text-sm text-[color:var(--wasatch-gray)] whitespace-pre-wrap">{summary.giftCard.message}</p>
+                  </div>
+                ) : null}
+
+                {summary.confirmationEmailSentAt ? (
+                  <p className="text-sm text-[color:var(--wasatch-blue)]">
+                    The gift card email was sent to the recipient and purchaser email on file.
+                  </p>
+                ) : null}
+              </div>
+            </Card>
+
+            <Card>
+              <div className="pt-2 flex flex-col sm:flex-row gap-3">
+                <Link href="/gift-cards">
+                  <Button variant="primary">Buy Another Gift Card</Button>
                 </Link>
                 <Link href="/events">
                   <Button variant="outline">Back to Events</Button>

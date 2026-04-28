@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { getStripe, getStripeWebhookSecret } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { sendEmail } from "@/lib/sendEmail";
+import { ensureGiftCardFromStripeSession, sendGiftCardDeliveryEmails } from "@/lib/giftCards";
 
 type OrderDetails = {
   id: string;
@@ -99,6 +100,28 @@ export async function POST(req: NextRequest) {
   if (event.type === "checkout.session.completed") {
     try {
       const session = event.data.object as Stripe.Checkout.Session;
+      const purchaseType = session.metadata?.purchaseType;
+
+      if (purchaseType === "gift_card") {
+        const giftCard = await ensureGiftCardFromStripeSession({ supabaseAdmin, session });
+
+        if (!giftCard) {
+          console.error("checkout.session.completed gift card session missing data", {
+            eventId: event.id,
+            sessionId: session.id,
+          });
+          return NextResponse.json({ error: "Gift card purchase could not be completed." }, { status: 400 });
+        }
+
+        await sendGiftCardDeliveryEmails({
+          supabaseAdmin,
+          giftCard,
+          senderName: session.metadata?.senderName || null,
+        });
+
+        return NextResponse.json({ received: true });
+      }
+
       const orderId = session.client_reference_id || session.metadata?.orderId;
       const offerToken = typeof session.metadata?.offerToken === "string" ? session.metadata.offerToken : "";
 

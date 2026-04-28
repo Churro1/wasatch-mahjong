@@ -301,48 +301,6 @@ export default function AdminPage() {
     setPresets(normalized as EventPreset[]);
   }
 
-  useEffect(() => {
-    async function initialize() {
-      const {
-        data: { user: currentUser },
-      } = await supabase.auth.getUser();
-
-      if (!currentUser) {
-        router.push(`/login?next=${encodeURIComponent("/admin")}`);
-        return;
-      }
-
-      setUser(currentUser);
-      setTestEmailTo(currentUser.email || "");
-
-      const { data: adminCheck, error: adminCheckError } = await supabase
-        .from("admin_users")
-        .select("user_id")
-        .eq("user_id", currentUser.id)
-        .limit(1);
-
-      if (adminCheckError) {
-        setAccessMessage(
-          "Admin checks are not available yet. Apply migration 005 to enable the admin dashboard."
-        );
-        setLoading(false);
-        return;
-      }
-
-      if (!adminCheck || adminCheck.length === 0) {
-        setAccessMessage("You are signed in, but your account is not an admin yet.");
-        setLoading(false);
-        return;
-      }
-
-      setIsAdmin(true);
-      await Promise.all([loadAdminUsers(), loadEvents(), loadPresets(), loadCoupons()]);
-      setLoading(false);
-    }
-
-    initialize();
-  }, [router]);
-
   const handleAddAdmin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!user) {
@@ -1145,6 +1103,48 @@ export default function AdminPage() {
     setCoupons(payload.coupons || []);
     setCouponsStatus("");
   }
+
+  useEffect(() => {
+    async function initialize() {
+      const {
+        data: { user: currentUser },
+      } = await supabase.auth.getUser();
+
+      if (!currentUser) {
+        router.push(`/login?next=${encodeURIComponent("/admin")}`);
+        return;
+      }
+
+      setUser(currentUser);
+      setTestEmailTo(currentUser.email || "");
+
+      const { data: adminCheck, error: adminCheckError } = await supabase
+        .from("admin_users")
+        .select("user_id")
+        .eq("user_id", currentUser.id)
+        .limit(1);
+
+      if (adminCheckError) {
+        setAccessMessage(
+          "Admin checks are not available yet. Apply migration 005 to enable the admin dashboard."
+        );
+        setLoading(false);
+        return;
+      }
+
+      if (!adminCheck || adminCheck.length === 0) {
+        setAccessMessage("You are signed in, but your account is not an admin yet.");
+        setLoading(false);
+        return;
+      }
+
+      setIsAdmin(true);
+      await Promise.all([loadAdminUsers(), loadEvents(), loadPresets(), loadCoupons()]);
+      setLoading(false);
+    }
+
+    initialize();
+  }, [router]);
 
   const handleOpenCouponModal = () => {
     setCouponCode("");

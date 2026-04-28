@@ -1,17 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
-type CouponRow = {
-  id: string;
-  code: string;
-  discount_type: string;
-  discount_value: number;
-  bogo_buy_quantity: number;
-  bogo_get_quantity: number;
-  expiry_date: string | null;
-  is_active: boolean;
-};
-
 export async function POST(req: NextRequest) {
   const supabaseAdmin = getSupabaseAdmin();
   const { couponCode, eventPrice } = await req.json();

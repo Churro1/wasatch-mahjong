@@ -5,6 +5,7 @@ import { getStripe } from "@/lib/stripe";
 import { getSiteOrigin } from "@/lib/siteUrl";
 import { dispatchWaitlistOffersForEvent } from "@/lib/waitlist";
 import { sendEmail } from "@/lib/sendEmail";
+import { normalizeGiftCardCode } from "@/lib/giftCards";
 
 type OrderRow = {
   id: string;
@@ -362,9 +363,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  const { orderId, offerToken, couponCode } = await req.json();
+  const { orderId, offerToken, couponCode, giftCardCode } = await req.json();
   const normalizedOfferToken = typeof offerToken === "string" ? offerToken : "";
   const normalizedCouponCode = typeof couponCode === "string" ? couponCode.trim().toUpperCase() : "";
+  const normalizedGiftCardCode = normalizeGiftCardCode(typeof giftCardCode === "string" ? giftCardCode : "");
   if (!orderId) {
     return NextResponse.json({ error: "Order ID is required." }, { status: 400 });
   }
@@ -513,6 +515,24 @@ export async function POST(req: NextRequest) {
 
   const subtotalAmount = unitAmount * attendeeCount;
   let discountAmount = 0;
+  let giftCardReservationApplied = false;
+
+  async function releaseReservedGiftCard() {
+    if (!giftCardReservationApplied) {
+      return;
+    }
+
+    try {
+      await supabaseAdmin.rpc("reverse_gift_card_redemptions", {
+        p_order_id: order.id,
+      });
+    } catch (releaseError) {
+      console.error("Failed to release reserved gift card after checkout error", {
+        orderId: order.id,
+        error: releaseError,
+      });
+    }
+  }
 
   if (normalizedCouponCode) {
     const { data: couponData, error: couponError } = await supabaseAdmin
@@ -555,19 +575,43 @@ export async function POST(req: NextRequest) {
   }
 
   discountAmount = Math.max(0, Math.min(discountAmount, subtotalAmount));
-  const totalAmount = Math.max(0, subtotalAmount - discountAmount);
+  const totalAfterCouponAmount = Math.max(0, subtotalAmount - discountAmount);
+  let totalAmount = totalAfterCouponAmount;
+  let giftCardAmount = 0;
 
   const { error: preCheckoutOrderUpdateError } = await supabaseAdmin
     .from("checkout_orders")
     .update({
       subtotal_amount: subtotalAmount,
-      total_amount: totalAmount,
+      total_amount: totalAfterCouponAmount,
       updated_at: new Date().toISOString(),
     })
     .eq("id", order.id);
 
   if (preCheckoutOrderUpdateError) {
     return NextResponse.json({ error: preCheckoutOrderUpdateError.message }, { status: 500 });
+  }
+
+  if (normalizedGiftCardCode && totalAfterCouponAmount > 0) {
+    const { data: giftCardData, error: giftCardError } = await supabaseAdmin.rpc("apply_gift_card_to_order", {
+      p_order_id: order.id,
+      p_gift_card_code: normalizedGiftCardCode,
+      p_requested_amount: totalAfterCouponAmount,
+    });
+
+    if (giftCardError) {
+      return NextResponse.json({ error: giftCardError.message }, { status: 400 });
+    }
+
+    const giftCardResult = Array.isArray(giftCardData) ? giftCardData[0] : giftCardData;
+    if (!giftCardResult) {
+      await releaseReservedGiftCard();
+      return NextResponse.json({ error: "Gift card could not be applied." }, { status: 500 });
+    }
+
+    giftCardReservationApplied = true;
+    giftCardAmount = Number(giftCardResult.applied_amount) || 0;
+    totalAmount = Math.max(0, Number(giftCardResult.order_total_amount) || totalAfterCouponAmount - giftCardAmount);
   }
 
   if (totalAmount === 0) {
@@ -580,11 +624,13 @@ export async function POST(req: NextRequest) {
     });
 
     if (finalizeError) {
+      await releaseReservedGiftCard();
       return NextResponse.json({ error: finalizeError.message }, { status: 500 });
     }
 
     const finalizedCandidate = Array.isArray(finalizedRows) ? finalizedRows[0] : finalizedRows;
     if (!finalizedCandidate) {
+      await releaseReservedGiftCard();
       return NextResponse.json({ error: "Finalize checkout returned no order." }, { status: 500 });
     }
 
@@ -644,6 +690,7 @@ export async function POST(req: NextRequest) {
         unitAmount,
       });
     } catch (catalogError) {
+      await releaseReservedGiftCard();
       return NextResponse.json(
         { error: catalogError instanceof Error ? catalogError.message : "Failed to prepare Stripe product pricing." },
         { status: 500 }
@@ -672,6 +719,8 @@ export async function POST(req: NextRequest) {
         attendeeCount: String(attendeeCount),
         offerToken: normalizedOfferToken,
         couponCode: normalizedCouponCode,
+        giftCardCode: normalizedGiftCardCode,
+        giftCardAmount: String(giftCardAmount),
         discountAmount: String(discountAmount),
       },
       line_items:
@@ -696,6 +745,7 @@ export async function POST(req: NextRequest) {
             ],
     });
   } catch (sessionError) {
+    await releaseReservedGiftCard();
     return NextResponse.json(
       {
         error:
@@ -719,6 +769,7 @@ export async function POST(req: NextRequest) {
     .eq("id", order.id);
 
   if (updateError) {
+    await releaseReservedGiftCard();
     return NextResponse.json({ error: updateError.message }, { status: 500 });
   }
 
