@@ -130,7 +130,7 @@ export default function SuccessContent() {
                   </div>
                   <div className="flex items-center justify-between">
                     <span>Attendees</span>
-                    <span>{summary.attendees.length}</span>
+                    <span>{summary.attendees?.length ?? 0}</span>
                   </div>
                   <div className="flex items-center justify-between text-lg font-semibold text-[color:var(--wasatch-blue)]">
                     <span>Total Paid</span>
