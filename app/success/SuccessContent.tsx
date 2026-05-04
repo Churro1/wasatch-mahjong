@@ -149,7 +149,7 @@ export default function SuccessContent() {
             <Card>
               <h2 className="font-serif text-2xl font-bold text-[color:var(--wasatch-red)] mb-4">Attendees</h2>
               <div className="space-y-3">
-                {summary.attendees.map((attendee) => (
+                {(summary.attendees || []).map((attendee) => (
                   <div key={`${attendee.full_name}-${attendee.email || "no-email"}`} className="rounded-2xl border border-[color:var(--wasatch-gray)]/30 p-4 bg-white">
                     <p className="font-semibold text-[color:var(--wasatch-blue)]">{attendee.full_name}</p>
                     <p className="text-sm text-[color:var(--wasatch-gray)]">{attendee.email || "No attendee email entered"}</p>
