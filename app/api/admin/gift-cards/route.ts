@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { formatGiftCardCode, generateGiftCardCode, normalizeGiftCardCode, sendGiftCardDeliveryEmails } from "@/lib/giftCards";
+import { formatGiftCardCode, generateGiftCardCode, normalizeGiftCardCode, sendGiftCardDeliveryEmails, type GiftCardRecord } from "@/lib/giftCards";
 
 type AdminGiftCardRow = {
   id: string;
@@ -141,7 +141,7 @@ export async function POST(req: NextRequest) {
   if (sendEmailNow && (insertedGiftCard.recipient_email || insertedGiftCard.purchaser_email)) {
     await sendGiftCardDeliveryEmails({
       supabaseAdmin,
-      giftCard: insertedGiftCard as AdminGiftCardRow,
+      giftCard: insertedGiftCard as GiftCardRecord,
       senderName: user.user_metadata?.full_name || user.email || "Wasatch Mahjong",
     });
   }
