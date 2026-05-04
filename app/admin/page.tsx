@@ -260,10 +260,11 @@ export default function AdminPage() {
 
   async function loadEvents() {
     const nowIso = new Date().toISOString();
+    const visibleUntilIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const { data, error } = await supabase
       .from("events")
       .select("id, name, description, event_date, event_type, price, capacity, spots_remaining, series_id, series_position, signups(id, order_id, attendee_name, attendee_email, is_buyer, payment_status, signup_status)")
-      .gt("event_date", nowIso)
+      .gte("event_date", visibleUntilIso)
       .order("event_date", { ascending: true });
 
     if (error) {

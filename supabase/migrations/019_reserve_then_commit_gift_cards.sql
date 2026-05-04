@@ -100,10 +100,12 @@ begin
     raise exception using errcode = 'P0001', message = 'This gift card has no remaining balance.';
   end if;
 
-  if found and v_existing_redemption.id is not null and v_existing_redemption.committed_at is null and v_existing_redemption.reversed_at is null then
+  if found and v_existing_redemption.id is not null and v_existing_redemption.committed_at is null then
     update public.gift_card_redemptions
     set gift_card_id = v_gift_card.id,
         amount = v_apply_amount,
+        reversed_at = null,
+        committed_at = null,
         reservation_expires_at = v_reservation_expires_at,
         updated_at = now()
     where id = v_existing_redemption.id;
