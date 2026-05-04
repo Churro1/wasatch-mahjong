@@ -852,11 +852,13 @@ export default function CartContent() {
                         <span>Subtotal</span>
                         <span>${subtotal.toFixed(2)}</span>
                       </div>
-                      <div className="flex items-center justify-between text-green-700">
-                        <span>Coupon ({appliedCoupon.code})</span>
-                        <span>- ${discountAmount.toFixed(2)}</span>
-                      </div>
                     </>
+                  ) : null}
+                  {appliedCoupon ? (
+                    <div className="flex items-center justify-between text-green-700">
+                      <span>Coupon ({appliedCoupon.code})</span>
+                      <span>- ${discountAmount.toFixed(2)}</span>
+                    </div>
                   ) : null}
                   {appliedGiftCard ? (
                     <div className="flex items-center justify-between text-green-700">
