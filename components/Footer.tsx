@@ -51,9 +51,9 @@ export function Footer() {
           {/* <span className="font-serif text-xl font-bold text-[color:var(--wasatch-blue)] tracking-tight">Wasatch Mahjong</span> */}
         </Link>
         {/* Address */}
-        <div className="text-center md:text-left text-[color:var(--wasatch-gray)] text-sm">
+        {/* <div className="text-center md:text-left text-[color:var(--wasatch-gray)] text-sm">
           3939 S Wasatch Blvd, Salt Lake City, UT 84124
-        </div>
+        </div> */}
         {/* Helpful Links */}
         <nav className="flex flex-col md:flex-row gap-2 md:gap-6 text-[color:var(--wasatch-blue)] font-sans text-base font-medium">
           <Link href="/" className="hover:text-[color:var(--wasatch-red)] transition">Home</Link>

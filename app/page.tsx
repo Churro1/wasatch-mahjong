@@ -161,16 +161,16 @@ export default function Home() {
       <section className="w-full max-w-3xl mx-auto py-12 px-4 text-center">
         <h2 className="font-serif text-2xl md:text-3xl font-bold text-[color:var(--wasatch-blue)] mb-4">Location</h2>
         <p className="text-lg text-[color:var(--wasatch-red)] font-sans mb-2">
-          <span>3939 S Wasatch Blvd, Salt Lake City, UT 84124</span>
+          {/* <span>3939 S Wasatch Blvd, Salt Lake City, UT 84124</span> */}
         </p>
-        <a
+        {/* <a
           href="https://maps.app.goo.gl/Kj5bom52uh6Vy2DG8?g_st=ic"
           target="_blank"
           rel="noopener noreferrer"
           className="inline-block mt-2 text-[color:var(--wasatch-blue)] underline hover:text-[color:var(--wasatch-red)] transition"
         >
           View on Google Maps
-        </a>
+        </a> */}
         <div className="text-sm text-[color:var(--wasatch-gray)] mt-4">
           We recommend arriving 10-15 minutes early to get settled before play begins.
         </div>
