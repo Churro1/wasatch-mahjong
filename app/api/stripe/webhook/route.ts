@@ -97,6 +97,39 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: (error as Error).message }, { status: 400 });
   }
 
+  // Idempotency guard: record the Stripe event and its processing status.
+  try {
+    const existing = await supabaseAdmin
+      .from("webhook_events")
+      .select("id, status")
+      .eq("stripe_event_id", event.id)
+      .maybeSingle();
+
+    if (existing.data) {
+      const existingStatus = existing.data.status;
+      // Already processed successfully or currently being processed — skip reprocessing.
+      if (existingStatus === "succeeded" || existingStatus === "processing") {
+        return NextResponse.json({ received: true });
+      }
+      // If previous attempt failed, mark as processing and continue.
+      await supabaseAdmin
+        .from("webhook_events")
+        .update({ status: "processing", error_text: null })
+        .eq("stripe_event_id", event.id);
+    } else {
+      await supabaseAdmin.from("webhook_events").insert({
+        stripe_event_id: event.id,
+        event_type: event.type,
+        payload: event,
+        status: "processing",
+      });
+    }
+  } catch (err) {
+    console.error("Failed to record webhook event for idempotency", { eventId: event.id, err });
+    // Do not proceed without recording—return 500 so Stripe will retry.
+    return NextResponse.json({ error: "Failed to record webhook event." }, { status: 500 });
+  }
+
   if (event.type === "checkout.session.completed") {
     try {
       const session = event.data.object as Stripe.Checkout.Session;
@@ -148,6 +181,11 @@ export async function POST(req: NextRequest) {
           details: finalizeError.details,
           hint: finalizeError.hint,
         });
+        // Mark webhook event as failed with details and return 500 so Stripe will retry
+        await supabaseAdmin
+          .from("webhook_events")
+          .update({ status: "failed", error_text: finalizeError.message, processed_at: new Date().toISOString() })
+          .eq("stripe_event_id", event.id);
         return NextResponse.json({ error: finalizeError.message }, { status: 500 });
       }
 
@@ -217,6 +255,11 @@ export async function POST(req: NextRequest) {
       const recipients: EmailRecipient[] = [];
 
       if (order?.confirmation_email_sent_at) {
+        // already handled; mark webhook as succeeded and return
+        await supabaseAdmin
+          .from("webhook_events")
+          .update({ status: "succeeded", processed_at: new Date().toISOString() })
+          .eq("stripe_event_id", event.id);
         return NextResponse.json({ received: true });
       }
 
@@ -291,18 +334,38 @@ export async function POST(req: NextRequest) {
             orderId: finalized.order_id,
           });
         }
+
+        // Mark webhook event processed successfully
+        await supabaseAdmin
+          .from("webhook_events")
+          .update({ status: "succeeded", processed_at: new Date().toISOString() })
+          .eq("stripe_event_id", event.id);
       } catch (emailError) {
         console.error("Confirmation email handling failed", {
           eventId: event.id,
           orderId: finalized.order_id,
           error: emailError,
         });
+        // Mark webhook event as failed so it can be retried/inspected
+        await supabaseAdmin
+          .from("webhook_events")
+          .update({ status: "failed", error_text: (emailError as Error).message || String(emailError), processed_at: new Date().toISOString() })
+          .eq("stripe_event_id", event.id);
       }
     } catch (unhandledError) {
       console.error("Unhandled checkout.session.completed webhook failure", {
         eventId: event.id,
         error: unhandledError,
       });
+      // Mark webhook event as failed with error
+      try {
+        await supabaseAdmin
+          .from("webhook_events")
+          .update({ status: "failed", error_text: (unhandledError as Error).message || String(unhandledError), processed_at: new Date().toISOString() })
+          .eq("stripe_event_id", event.id);
+      } catch (recErr) {
+        console.error("Failed to mark webhook event failed", { eventId: event.id, recErr });
+      }
       return NextResponse.json({ error: "Unhandled checkout completion failure." }, { status: 500 });
     }
   }
