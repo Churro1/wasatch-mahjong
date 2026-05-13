@@ -38,9 +38,31 @@ type ManagedEvent = {
     payment_status: string;
     signup_status: string;
   }>;
+  checkout_orders?: Array<{
+    id: string;
+    status: string;
+    checkout_order_attendees: Array<{
+      id: string;
+      order_id: string | null;
+      full_name: string;
+      email: string | null;
+      is_buyer: boolean;
+    }> | null;
+  }>;
 };
 type ManagedEventRow = Omit<ManagedEvent, "price"> & {
   price: string | number;
+  checkout_orders?: Array<{
+    id: string;
+    status: string;
+    checkout_order_attendees: Array<{
+      id: string;
+      order_id: string | null;
+      full_name: string;
+      email: string | null;
+      is_buyer: boolean;
+    }> | null;
+  }>;
 };
 
 type EventPreset = {
@@ -159,6 +181,42 @@ function generateEventCode(length = 8): string {
   }
 
   return code;
+}
+
+function mergeRosterEntries(
+  signups: ManagedEvent["signups"],
+  checkoutOrders: NonNullable<ManagedEvent["checkout_orders"]>
+): ManagedEvent["signups"] {
+  const merged = [...signups];
+  const seen = new Set(
+    merged.map((signup) => `${signup.order_id || ""}:${signup.attendee_name}:${signup.attendee_email || ""}:${signup.is_buyer}`)
+  );
+
+  for (const order of checkoutOrders) {
+    if (order.status !== "paid") {
+      continue;
+    }
+
+    for (const attendee of order.checkout_order_attendees || []) {
+      const key = `${order.id}:${attendee.full_name}:${attendee.email || ""}:${attendee.is_buyer}`;
+      if (seen.has(key)) {
+        continue;
+      }
+
+      seen.add(key);
+      merged.push({
+        id: attendee.id,
+        order_id: attendee.order_id || order.id,
+        attendee_name: attendee.full_name,
+        attendee_email: attendee.email,
+        is_buyer: attendee.is_buyer,
+        payment_status: order.status,
+        signup_status: "active",
+      });
+    }
+  }
+
+  return merged;
 }
 
 export default function AdminPage() {
@@ -283,7 +341,7 @@ export default function AdminPage() {
     const visibleUntilIso = visibleUntil.toISOString();
     const { data, error } = await supabase
       .from("events")
-      .select("id, name, description, event_date, event_type, is_private, event_code, price, capacity, spots_remaining, series_id, series_position, signups(id, order_id, attendee_name, attendee_email, is_buyer, payment_status, signup_status)")
+      .select("id, name, description, event_date, event_type, is_private, event_code, price, capacity, spots_remaining, series_id, series_position, signups(id, order_id, attendee_name, attendee_email, is_buyer, payment_status, signup_status), checkout_orders(id, status, checkout_order_attendees(id, order_id, full_name, email, is_buyer))")
       .gte("event_date", visibleUntilIso)
       .order("event_date", { ascending: true });
 
@@ -295,6 +353,7 @@ export default function AdminPage() {
     const normalized = (data || []).map((row: ManagedEventRow): ManagedEvent => ({
       ...row,
       price: Number(row.price),
+      signups: mergeRosterEntries(row.signups || [], row.checkout_orders || []),
     }));
 
     setEvents(normalized as ManagedEvent[]);
