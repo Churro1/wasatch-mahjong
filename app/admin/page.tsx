@@ -242,6 +242,8 @@ export default function AdminPage() {
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
   const [exportingEventId, setExportingEventId] = useState<string | null>(null);
+  const [reconcilingRosters, setReconcilingRosters] = useState(false);
+  const [reconcileStatus, setReconcileStatus] = useState("");
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createStep, setCreateStep] = useState<"type" | "form">("type");
@@ -1150,6 +1152,44 @@ export default function AdminPage() {
     setExportingEventId(null);
   };
 
+  const handleReconcileRosters = async () => {
+    setReconcilingRosters(true);
+    setReconcileStatus("");
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const accessToken = session?.access_token;
+
+    if (!accessToken) {
+      setReconcileStatus("Your session expired. Please sign in again.");
+      setReconcilingRosters(false);
+      return;
+    }
+
+    const response = await fetch("/api/admin/reconcile-rosters", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    const payload = await response.json();
+
+    if (!response.ok) {
+      setReconcileStatus(payload.error || "Could not reconcile rosters.");
+      setReconcilingRosters(false);
+      return;
+    }
+
+    setReconcileStatus(
+      `Rosters synced! Processed ${payload.processedAttendees} attendees, created ${payload.createdSignups} new signups.`
+    );
+    await loadEvents();
+    setReconcilingRosters(false);
+  };
+
   const handleCancelOrder = async (orderId: string, eventDate: string) => {
     const confirmed = window.confirm(
       "Cancel this paid order? Any eligible refund will be reduced by the $10 cancellation fee."
@@ -2006,6 +2046,17 @@ export default function AdminPage() {
               <Button variant="secondary" onClick={handleExportAccountEmails} disabled={exportingAccounts}>
                 {exportingAccounts ? "Exporting..." : "Export Account Emails"}
               </Button>
+            </div>
+
+            <div className="rounded-2xl border border-[color:var(--wasatch-gray)]/30 bg-white p-4">
+              <h3 className="font-serif text-lg font-bold text-[color:var(--wasatch-blue)] mb-2">Refresh Rosters</h3>
+              <p className="text-sm text-[color:var(--wasatch-gray)] mb-3">
+                Sync any missing paid attendees to the event rosters. Use this if you notice incomplete rosters after checkout.
+              </p>
+              <Button variant="secondary" onClick={handleReconcileRosters} disabled={reconcilingRosters}>
+                {reconcilingRosters ? "Syncing..." : "Refresh Rosters"}
+              </Button>
+              {reconcileStatus ? <p className="text-sm text-[color:var(--wasatch-blue)] mt-2">{reconcileStatus}</p> : null}
             </div>
           </div>
 
