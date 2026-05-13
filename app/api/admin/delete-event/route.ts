@@ -54,14 +54,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Event not found." }, { status: 404 });
   }
 
-  const { count: orderCount, error: orderCountError } = await supabaseAdmin
+  const { data: checkoutOrders, error: checkoutOrdersError } = await supabaseAdmin
     .from("checkout_orders")
-    .select("id", { count: "exact", head: true })
+    .select("id, status")
     .eq("event_id", normalizedEventId);
 
-  if (orderCountError) {
-    return NextResponse.json({ error: orderCountError.message }, { status: 500 });
+  if (checkoutOrdersError) {
+    return NextResponse.json({ error: checkoutOrdersError.message }, { status: 500 });
   }
+
+  const hasBlockingOrders = (checkoutOrders || []).some((order) => order.status !== "draft");
+  const draftOrderIds = (checkoutOrders || [])
+    .filter((order) => order.status === "draft")
+    .map((order) => order.id);
 
   const { count: signupCount, error: signupCountError } = await supabaseAdmin
     .from("signups")
@@ -79,11 +84,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  if ((orderCount || 0) > 0) {
+  if (hasBlockingOrders) {
     return NextResponse.json(
-      { error: "Cannot delete this event because it has checkout orders. Delete or cancel those orders first." },
+      { error: "Cannot delete this event because it has active or completed checkout orders." },
       { status: 409 }
     );
+  }
+
+  if (draftOrderIds.length > 0) {
+    const { error: draftDeleteError } = await supabaseAdmin
+      .from("checkout_orders")
+      .delete()
+      .in("id", draftOrderIds);
+
+    if (draftDeleteError) {
+      return NextResponse.json({ error: draftDeleteError.message }, { status: 500 });
+    }
   }
 
   const { error: deleteError } = await supabaseAdmin

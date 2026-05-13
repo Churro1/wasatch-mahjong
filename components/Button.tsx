@@ -20,6 +20,7 @@ const variants = {
 export function Button({ variant = "primary", children, className = "", ...props }: ButtonProps) {
   return (
     <button
+      type={props.type || "button"}
       className={`${base} ${variants[variant]} ${className}`}
       {...props}
     >
