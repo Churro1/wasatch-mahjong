@@ -14,6 +14,7 @@ type CheckoutEvent = {
   description: string | null;
   event_date: string;
   event_type: "open_play" | "class" | "custom" | null;
+  is_private: boolean;
   price: number;
   spots_remaining: number | null;
   capacity: number | null;
@@ -49,6 +50,10 @@ export default function CheckoutContent() {
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
   const [couponError, setCouponError] = useState("");
   const [applyingCoupon, setApplyingCoupon] = useState(false);
+  const [eventCodeInput, setEventCodeInput] = useState("");
+  const [eventCodeVerified, setEventCodeVerified] = useState(false);
+  const [eventCodeError, setEventCodeError] = useState("");
+  const [verifyingEventCode, setVerifyingEventCode] = useState(false);
 
   const checkoutPath = useMemo(() => {
     if (!eventId) {
@@ -78,7 +83,7 @@ export default function CheckoutContent() {
 
       const { data, error: eventError } = await supabase
         .from("events")
-        .select("id, name, description, event_date, event_type, price, spots_remaining, capacity")
+        .select("id, name, description, event_date, event_type, is_private, price, spots_remaining, capacity")
         .eq("id", eventId)
         .single();
 
@@ -96,6 +101,9 @@ export default function CheckoutContent() {
       }
 
       setEvent({ ...data, price: normalizedPrice });
+      setEventCodeVerified(false);
+      setEventCodeInput("");
+      setEventCodeError("");
       setLoading(false);
     }
 
@@ -154,7 +162,62 @@ export default function CheckoutContent() {
       return;
     }
 
+    if (event?.is_private && !eventCodeVerified) {
+      setEventCodeError("Enter the event code to continue.");
+      return;
+    }
+
+    if (event?.is_private) {
+      router.push(
+        `/cart?eventId=${encodeURIComponent(eventId)}&eventCode=${encodeURIComponent(eventCodeInput.trim().toUpperCase())}`
+      );
+      return;
+    }
+
     router.push(`/cart?eventId=${encodeURIComponent(eventId)}`);
+  };
+
+  const handleVerifyEventCode = async () => {
+    if (!event || !event.is_private) {
+      setEventCodeVerified(true);
+      return;
+    }
+
+    const normalizedCode = eventCodeInput.trim().toUpperCase();
+    if (!normalizedCode) {
+      setEventCodeError("Event code is required for this private event.");
+      return;
+    }
+
+    setVerifyingEventCode(true);
+    setEventCodeError("");
+
+    try {
+      const response = await fetch("/api/checkout/validate-event-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          eventId,
+          eventCode: normalizedCode,
+        }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        setEventCodeVerified(false);
+        setEventCodeError(payload.error || "Invalid event code.");
+        return;
+      }
+
+      setEventCodeInput(normalizedCode);
+      setEventCodeVerified(true);
+      setEventCodeError("");
+    } catch {
+      setEventCodeVerified(false);
+      setEventCodeError("Unable to verify the event code right now.");
+    } finally {
+      setVerifyingEventCode(false);
+    }
   };
 
   return (
@@ -190,7 +253,45 @@ export default function CheckoutContent() {
                 <p className="text-[color:var(--wasatch-blue)] text-sm mt-1">
                   {toCheckoutTypeLabel(event.event_type)}
                 </p>
+                {event.is_private ? (
+                  <p className="text-[color:var(--wasatch-red)] text-sm mt-1 font-semibold">Private Event</p>
+                ) : null}
               </div>
+
+              {event.is_private ? (
+                <div className="rounded-2xl bg-white border border-[color:var(--wasatch-gray)]/30 p-4 space-y-2">
+                  <label htmlFor="event-code" className="block text-sm font-medium text-[color:var(--wasatch-gray)]">
+                    Event Code
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      id="event-code"
+                      type="text"
+                      value={eventCodeInput}
+                      onChange={(e) => {
+                        setEventCodeInput(e.target.value.toUpperCase().slice(0, 8));
+                        setEventCodeVerified(false);
+                        setEventCodeError("");
+                      }}
+                      maxLength={8}
+                      className="flex-1 rounded-lg border border-[color:var(--wasatch-gray)] bg-white px-3 py-2 text-sm tracking-[0.2em]"
+                      placeholder="XXXXXXXX"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleVerifyEventCode}
+                      disabled={verifyingEventCode || !eventCodeInput.trim()}
+                    >
+                      {verifyingEventCode ? "Verifying..." : "Verify"}
+                    </Button>
+                  </div>
+                  {eventCodeVerified ? (
+                    <p className="text-xs text-green-700">Event code verified.</p>
+                  ) : null}
+                  {eventCodeError ? <p className="text-xs text-[color:var(--wasatch-red)]">{eventCodeError}</p> : null}
+                </div>
+              ) : null}
 
               <div className="rounded-2xl bg-white border border-[color:var(--wasatch-gray)]/30 p-4 space-y-2">
                 <div className="flex items-center justify-between text-[color:var(--wasatch-gray)]">

@@ -140,7 +140,7 @@ export default function EventDetailPage() {
         ) : null}
 
         {!userIsSignedUp && event.spots > 0 ? (
-          <Link href={`/cart?eventId=${event.id}`}>
+          <Link href={`/checkout?eventId=${event.id}`}>
             <Button variant="secondary">Sign Up</Button>
           </Link>
         ) : null}

@@ -22,6 +22,8 @@ type ManagedEvent = {
   description: string | null;
   event_date: string;
   event_type: EventTypeValue | null;
+  is_private: boolean;
+  event_code: string | null;
   price: number;
   capacity: number;
   spots_remaining: number;
@@ -146,6 +148,19 @@ function toLocalTimeInput(isoDate: string): string {
   return format(date, "HH:mm");
 }
 
+function generateEventCode(length = 8): string {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  const randomBytes = new Uint8Array(length);
+  crypto.getRandomValues(randomBytes);
+
+  let code = "";
+  for (let index = 0; index < length; index += 1) {
+    code += alphabet[randomBytes[index] % alphabet.length];
+  }
+
+  return code;
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const cancellationNoticeMs = 24 * 60 * 60 * 1000;
@@ -175,6 +190,8 @@ export default function AdminPage() {
   const [selectedCreateType, setSelectedCreateType] = useState<EventTypeValue | null>(null);
   const [selectedPresetId, setSelectedPresetId] = useState("");
   const [creatingEvent, setCreatingEvent] = useState(false);
+  const [createIsPrivate, setCreateIsPrivate] = useState(false);
+  const [createEventCode, setCreateEventCode] = useState("");
   const [createForm, setCreateForm] = useState<CreateFormValues>({
     title: "",
     description: "",
@@ -214,6 +231,8 @@ export default function AdminPage() {
   const [editPrice, setEditPrice] = useState("0");
   const [editCapacity, setEditCapacity] = useState("1");
   const [editSpots, setEditSpots] = useState("1");
+  const [editIsPrivate, setEditIsPrivate] = useState(false);
+  const [editEventCode, setEditEventCode] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
 
   const [coupons, setCoupons] = useState<Coupon[]>([]);
@@ -259,11 +278,12 @@ export default function AdminPage() {
   }
 
   async function loadEvents() {
-    const nowIso = new Date().toISOString();
-    const visibleUntilIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const visibleUntil = new Date();
+    visibleUntil.setDate(visibleUntil.getDate() - 7);
+    const visibleUntilIso = visibleUntil.toISOString();
     const { data, error } = await supabase
       .from("events")
-      .select("id, name, description, event_date, event_type, price, capacity, spots_remaining, series_id, series_position, signups(id, order_id, attendee_name, attendee_email, is_buyer, payment_status, signup_status)")
+      .select("id, name, description, event_date, event_type, is_private, event_code, price, capacity, spots_remaining, series_id, series_position, signups(id, order_id, attendee_name, attendee_email, is_buyer, payment_status, signup_status)")
       .gte("event_date", visibleUntilIso)
       .order("event_date", { ascending: true });
 
@@ -468,6 +488,8 @@ export default function AdminPage() {
     setCreateStep("type");
     setSelectedCreateType(null);
     setSelectedPresetId("");
+    setCreateIsPrivate(false);
+    setCreateEventCode("");
     setCreateForm({
       title: "",
       description: "",
@@ -621,12 +643,21 @@ export default function AdminPage() {
     setCreatingEvent(true);
     setEventsStatus("");
 
+    const normalizedCreateCode = createEventCode.trim().toUpperCase();
+    if (createIsPrivate && !/^[A-Z0-9]{8}$/.test(normalizedCreateCode)) {
+      setEventsStatus("Private events must use an 8 character event code.");
+      setCreatingEvent(false);
+      return;
+    }
+
     if (!isRepeating) {
       const { error } = await supabase.from("events").insert({
         name: createForm.title.trim(),
         description: createForm.description.trim() || null,
         event_date: eventDate.toISOString(),
         event_type: selectedCreateType,
+        is_private: createIsPrivate,
+        event_code: createIsPrivate ? normalizedCreateCode : null,
         price: selectedCost,
         capacity: selectedSpots,
         spots_remaining: selectedSpots,
@@ -733,6 +764,28 @@ export default function AdminPage() {
       setEventsStatus(error.message);
       setCreatingEvent(false);
       return;
+    }
+
+    if (createIsPrivate && Array.isArray(data) && data.length > 0) {
+      const createdEventIds = data
+        .map((row: { event_id?: string }) => row.event_id)
+        .filter((value): value is string => typeof value === "string");
+
+      if (createdEventIds.length > 0) {
+        const { error: privateUpdateError } = await supabase
+          .from("events")
+          .update({
+            is_private: true,
+            event_code: normalizedCreateCode,
+          })
+          .in("id", createdEventIds);
+
+        if (privateUpdateError) {
+          setEventsStatus(privateUpdateError.message);
+          setCreatingEvent(false);
+          return;
+        }
+      }
     }
 
     const createdCount = Array.isArray(data) ? data.length : 0;
@@ -843,6 +896,8 @@ export default function AdminPage() {
     setEditPrice(String(item.price));
     setEditCapacity(String(item.capacity));
     setEditSpots(String(item.spots_remaining));
+    setEditIsPrivate(item.is_private);
+    setEditEventCode(item.event_code || generateEventCode());
   };
 
   const cancelEdit = () => {
@@ -855,6 +910,8 @@ export default function AdminPage() {
     setEditPrice("0");
     setEditCapacity("1");
     setEditSpots("1");
+    setEditIsPrivate(false);
+    setEditEventCode("");
   };
 
   const handleSaveEdit = async (eventId: string) => {
@@ -892,6 +949,12 @@ export default function AdminPage() {
       return;
     }
 
+    const normalizedEditCode = editEventCode.trim().toUpperCase();
+    if (editIsPrivate && !/^[A-Z0-9]{8}$/.test(normalizedEditCode)) {
+      setEventsStatus("Private events must use an 8 character event code.");
+      return;
+    }
+
     setSavingEdit(true);
     setEventsStatus("");
 
@@ -901,6 +964,8 @@ export default function AdminPage() {
         name: editName.trim(),
         description: editDescription.trim() || null,
         event_date: eventDate.toISOString(),
+        is_private: editIsPrivate,
+        event_code: editIsPrivate ? normalizedEditCode : null,
         price: nextPrice,
         capacity: nextCapacity,
         spots_remaining: nextSpots,
@@ -1549,6 +1614,11 @@ export default function AdminPage() {
                           <span className="mr-3">Price: ${item.price}</span>
                           <span className="mr-3">Capacity: {item.capacity}</span>
                           <span>Spots Remaining: {item.spots_remaining}</span>
+                          {item.is_private ? (
+                            <span className="ml-3 text-[color:var(--wasatch-red)] font-semibold">
+                              Private | Code: {item.event_code || "-"}
+                            </span>
+                          ) : null}
                           {item.series_id ? <span className="ml-3">Series #{item.series_position || "-"}</span> : null}
                         </div>
                         <div className="rounded-2xl border border-[color:var(--wasatch-gray)]/20 bg-[color:var(--wasatch-bg2)]/40 p-3">
@@ -1682,6 +1752,48 @@ export default function AdminPage() {
                               onChange={(e) => setEditSpots(e.target.value)}
                               className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2"
                             />
+                          </div>
+
+                          <div className="md:col-span-2 rounded-2xl border border-[color:var(--wasatch-gray)]/30 p-3 space-y-3">
+                            <label className="inline-flex items-center gap-2 text-sm text-[color:var(--wasatch-gray)]">
+                              <input
+                                name="editIsPrivate"
+                                type="checkbox"
+                                checked={editIsPrivate}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  setEditIsPrivate(checked);
+                                  if (checked && !editEventCode) {
+                                    setEditEventCode(generateEventCode());
+                                  }
+                                }}
+                              />
+                              Make this event private (requires event code at checkout)
+                            </label>
+
+                            {editIsPrivate ? (
+                              <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+                                <div className="flex-1">
+                                  <label htmlFor="edit-event-code" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Event Code</label>
+                                  <input
+                                    id="edit-event-code"
+                                    name="editEventCode"
+                                    type="text"
+                                    value={editEventCode}
+                                    onChange={(e) => setEditEventCode(e.target.value.toUpperCase().slice(0, 8))}
+                                    maxLength={8}
+                                    className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2 tracking-[0.2em]"
+                                  />
+                                </div>
+                                <Button
+                                  variant="outline"
+                                  type="button"
+                                  onClick={() => setEditEventCode(generateEventCode())}
+                                >
+                                  Regenerate
+                                </Button>
+                              </div>
+                            ) : null}
                           </div>
                         </div>
 
@@ -1988,6 +2100,48 @@ export default function AdminPage() {
                           required
                         />
                       </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-[color:var(--wasatch-gray)]/30 p-3 space-y-3">
+                      <label className="inline-flex items-center gap-2 text-sm text-[color:var(--wasatch-gray)]">
+                        <input
+                          name="createIsPrivate"
+                          type="checkbox"
+                          checked={createIsPrivate}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setCreateIsPrivate(checked);
+                            if (checked && !createEventCode) {
+                              setCreateEventCode(generateEventCode());
+                            }
+                          }}
+                        />
+                        Make this event private (requires event code at checkout)
+                      </label>
+
+                      {createIsPrivate ? (
+                        <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+                          <div className="flex-1">
+                            <label htmlFor="create-event-code" className="block text-sm font-medium text-[color:var(--wasatch-gray)] mb-1">Event Code</label>
+                            <input
+                              id="create-event-code"
+                              name="createEventCode"
+                              type="text"
+                              value={createEventCode}
+                              onChange={(e) => setCreateEventCode(e.target.value.toUpperCase().slice(0, 8))}
+                              maxLength={8}
+                              className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2 tracking-[0.2em]"
+                            />
+                          </div>
+                          <Button
+                            variant="outline"
+                            type="button"
+                            onClick={() => setCreateEventCode(generateEventCode())}
+                          >
+                            Regenerate
+                          </Button>
+                        </div>
+                      ) : null}
                     </div>
 
                     <div className="rounded-2xl border border-[color:var(--wasatch-gray)]/30 p-3 space-y-3">

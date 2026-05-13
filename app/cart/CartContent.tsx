@@ -15,6 +15,8 @@ type CartEvent = {
   description: string | null;
   event_date: string;
   event_type: "open_play" | "class" | "custom" | null;
+  is_private: boolean;
+  event_code: string | null;
   price: number;
   spots_remaining: number | null;
   capacity: number | null;
@@ -92,6 +94,7 @@ export default function CartContent() {
   const searchParams = useSearchParams();
   const eventId = searchParams.get("eventId");
   const offerToken = searchParams.get("offer");
+  const eventCode = searchParams.get("eventCode");
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -117,8 +120,8 @@ export default function CartContent() {
     }
     return `/cart?eventId=${encodeURIComponent(eventId)}${
       offerToken ? `&offer=${encodeURIComponent(offerToken)}` : ""
-    }`;
-  }, [eventId, offerToken]);
+    }${eventCode ? `&eventCode=${encodeURIComponent(eventCode)}` : ""}`;
+  }, [eventCode, eventId, offerToken]);
 
   const attendeeLimit = useMemo(() => {
     if (offerToken) {
@@ -200,7 +203,7 @@ export default function CartContent() {
       }
       const { data: eventData, error: eventError } = await supabase
         .from("events")
-        .select("id, name, description, event_date, event_type, price, spots_remaining, capacity")
+        .select("id, name, description, event_date, event_type, is_private, event_code, price, spots_remaining, capacity")
         .eq("id", eventId)
         .single();
 
@@ -214,6 +217,16 @@ export default function CartContent() {
         ...eventData,
         price: Number(eventData.price),
       } as CartEvent;
+
+      if (normalizedEvent.is_private) {
+        const normalizedCode = (eventCode || "").trim().toUpperCase();
+        if (!normalizedCode || normalizedCode !== normalizedEvent.event_code) {
+          setError("This is a private event. Enter the event code on checkout before continuing.");
+          setEvent(normalizedEvent);
+          setLoading(false);
+          return;
+        }
+      }
 
       if (
         typeof normalizedEvent.spots_remaining === "number" &&
@@ -343,7 +356,7 @@ export default function CartContent() {
     }
 
     loadCart();
-  }, [cartPath, eventId, offerToken, router]);
+  }, [cartPath, eventCode, eventId, offerToken, router]);
 
   const handleAttendeeChange = (index: number, field: "full_name" | "email" | "phone", value: string) => {
     setAttendees((current) =>
@@ -662,6 +675,7 @@ export default function CartContent() {
       body: JSON.stringify({
         orderId,
         offerToken: offerToken || undefined,
+        eventCode: eventCode || undefined,
         couponCode: appliedCoupon?.code || undefined,
         giftCardCode: appliedGiftCard?.code || undefined,
       }),

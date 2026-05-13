@@ -32,6 +32,8 @@ type OrderRow = {
         event_date: string;
         price: number;
         spots_remaining: number | null;
+        is_private: boolean;
+        event_code: string | null;
         stripe_product_id: string | null;
         stripe_price_id: string | null;
         stripe_price_unit_amount: number | null;
@@ -44,6 +46,8 @@ type OrderRow = {
         event_date: string;
         price: number;
         spots_remaining: number | null;
+        is_private: boolean;
+        event_code: string | null;
         stripe_product_id: string | null;
         stripe_price_id: string | null;
         stripe_price_unit_amount: number | null;
@@ -59,6 +63,8 @@ type OrderEvent = {
   event_date: string;
   price: number;
   spots_remaining: number | null;
+  is_private: boolean;
+  event_code: string | null;
   stripe_product_id: string | null;
   stripe_price_id: string | null;
   stripe_price_unit_amount: number | null;
@@ -363,10 +369,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  const { orderId, offerToken, couponCode, giftCardCode } = await req.json();
+  const { orderId, offerToken, couponCode, giftCardCode, eventCode } = await req.json();
   const normalizedOfferToken = typeof offerToken === "string" ? offerToken : "";
   const normalizedCouponCode = typeof couponCode === "string" ? couponCode.trim().toUpperCase() : "";
   const normalizedGiftCardCode = normalizeGiftCardCode(typeof giftCardCode === "string" ? giftCardCode : "");
+  const normalizedEventCode = typeof eventCode === "string" ? eventCode.trim().toUpperCase() : "";
   if (!orderId) {
     return NextResponse.json({ error: "Order ID is required." }, { status: 400 });
   }
@@ -374,7 +381,7 @@ export async function POST(req: NextRequest) {
   const { data, error } = await supabaseAdmin
     .from("checkout_orders")
     .select(
-      "id, buyer_user_id, event_id, status, subtotal_amount, total_amount, currency, checkout_order_attendees(id, full_name, email, phone, is_buyer), events(id, name, description, event_date, price, spots_remaining, stripe_product_id, stripe_price_id, stripe_price_unit_amount, stripe_price_currency)"
+      "id, buyer_user_id, event_id, status, subtotal_amount, total_amount, currency, checkout_order_attendees(id, full_name, email, phone, is_buyer), events(id, name, description, event_date, price, spots_remaining, is_private, event_code, stripe_product_id, stripe_price_id, stripe_price_unit_amount, stripe_price_currency)"
     )
     .eq("id", orderId)
     .eq("buyer_user_id", user.id)
@@ -398,6 +405,16 @@ export async function POST(req: NextRequest) {
 
   if (attendees.length === 0) {
     return NextResponse.json({ error: "Add at least one attendee before checkout." }, { status: 400 });
+  }
+
+  if (event.is_private) {
+    if (!normalizedEventCode) {
+      return NextResponse.json({ error: "Event code is required for this private event." }, { status: 403 });
+    }
+
+    if (!event.event_code || normalizedEventCode !== event.event_code) {
+      return NextResponse.json({ error: "Invalid event code for this private event." }, { status: 403 });
+    }
   }
 
   if (attendees.some((attendee) => attendee.full_name.trim().length === 0)) {
@@ -704,7 +721,7 @@ export async function POST(req: NextRequest) {
   try {
     const cancelUrl = `${siteOrigin}/cart?eventId=${encodeURIComponent(order.event_id)}${
       normalizedOfferToken ? `&offer=${encodeURIComponent(normalizedOfferToken)}` : ""
-    }`;
+    }${event.is_private && normalizedEventCode ? `&eventCode=${encodeURIComponent(normalizedEventCode)}` : ""}`;
 
     session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -718,6 +735,7 @@ export async function POST(req: NextRequest) {
         buyerUserId: user.id,
         attendeeCount: String(attendeeCount),
         offerToken: normalizedOfferToken,
+        eventCode: normalizedEventCode,
         couponCode: normalizedCouponCode,
         giftCardCode: normalizedGiftCardCode,
         giftCardAmount: String(giftCardAmount),
