@@ -5,14 +5,18 @@
 alter table if exists public.webhook_events enable row level security;
 
 -- Prevent any non-service_role access via PostgREST/JWT by denying all operations.
-create policy if not exists "webhook_events_no_select" on public.webhook_events
+drop policy if exists "webhook_events_no_select" on public.webhook_events;
+create policy "webhook_events_no_select" on public.webhook_events
 for select using (false);
 
-create policy if not exists "webhook_events_no_insert" on public.webhook_events
+drop policy if exists "webhook_events_no_insert" on public.webhook_events;
+create policy "webhook_events_no_insert" on public.webhook_events
 for insert with check (false);
 
-create policy if not exists "webhook_events_no_update" on public.webhook_events
+drop policy if exists "webhook_events_no_update" on public.webhook_events;
+create policy "webhook_events_no_update" on public.webhook_events
 for update using (false) with check (false);
 
-create policy if not exists "webhook_events_no_delete" on public.webhook_events
+drop policy if exists "webhook_events_no_delete" on public.webhook_events;
+create policy "webhook_events_no_delete" on public.webhook_events
 for delete using (false);
