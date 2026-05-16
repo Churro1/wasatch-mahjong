@@ -16,113 +16,62 @@ type OrderRow = {
   total_amount: number;
   currency: string;
   checkout_order_attendees:
-    <p><strong>${params.buyerName}</strong> has registered you for <strong>${params.eventName}</strong>.</p>
-    <p><strong>Date:</strong> ${params.eventDate}</p>
-    <h2>Day Of</h2>
-    <ul>
-      <li>Show up 15 minutes early to get signed in and settled.</li>
-      <li>No need to bring tiles.</li>
-      <li>Bring a card if you want.</li>
-    </ul>
-    <h2>Cancellation Policy</h2>
-    <p>Cancellations require at least 24 hours notice and include a $10 cancellation fee.</p>
-  `;
-}
+    | Array<{
+        id: string;
+        full_name: string;
+        email: string | null;
+        phone?: string | null;
+        is_buyer: boolean;
+      }>
+    | null;
+  events: OrderEvent | Array<OrderEvent> | null;
+};
 
-async function sendOrderConfirmationEmails(params: {
-  supabaseAdmin: ReturnType<typeof getSupabaseAdmin>;
-  orderId: string;
-  buyerEmail: string | null;
-  attendeeCount: number;
-  totalAmount: number;
-}) {
-  const { supabaseAdmin, orderId, buyerEmail, attendeeCount, totalAmount } = params;
+type OrderEvent = {
+  id: string;
+  name: string;
+  description: string | null;
+  event_date: string;
+  price: number;
+  spots_remaining: number | null;
+  is_private: boolean;
+  event_code: string | null;
+  stripe_product_id: string | null;
+  stripe_price_id: string | null;
+  stripe_price_unit_amount: number | null;
+  stripe_price_currency: string | null;
+};
 
-  const { data: orderDetails, error: orderDetailsError } = await supabaseAdmin
-    .from("checkout_orders")
-    .select("id, confirmation_email_sent_at, checkout_order_attendees(full_name, email, is_buyer), events(name, event_date)")
-    .eq("id", orderId)
-    .single();
+type ActiveWaitlistOffer = {
+  id: string;
+  offer_token: string;
+  expires_at: string;
+  entry_id: string;
+  waitlist_entries:
+    | {
+        id: string;
+        email: string;
+      }
+    | Array<{
+        id: string;
+        email: string;
+      }>
+    | null;
+};
 
-  if (orderDetailsError || !orderDetails) {
-    console.error("Failed to load order details for confirmation email", {
-      orderId,
-      error: orderDetailsError?.message,
-    });
-    return;
-  }
+type CouponRow = {
+  id: string;
+  code: string;
+  discount_type: "dollar" | "percentage" | "bogo";
+  discount_value: number;
+  bogo_buy_quantity: number;
+  bogo_get_quantity: number;
+  expiry_date: string | null;
+  is_active: boolean;
+};
 
-  const order = orderDetails as OrderDetails;
-  if (order.confirmation_email_sent_at) {
-    return;
-  }
-
-  const eventSummary = order.events ? (Array.isArray(order.events) ? order.events[0] : order.events) : null;
-  const uniqueEmails = new Set<string>();
-  const recipients: EmailRecipient[] = [];
-  const buyerAttendee = (order.checkout_order_attendees || []).find((attendee) => attendee.is_buyer) || null;
-  const buyerEmailFromOrder = buyerAttendee?.email?.trim().toLowerCase() || "";
-  const buyerEmailFromFinalize = typeof buyerEmail === "string" ? buyerEmail.trim().toLowerCase() : "";
-  const normalizedBuyerEmail = buyerEmailFromFinalize || buyerEmailFromOrder;
-  const buyerName = buyerAttendee?.full_name || "there";
-
-  if (normalizedBuyerEmail) {
-    uniqueEmails.add(normalizedBuyerEmail);
-    recipients.push({ email: normalizedBuyerEmail, name: buyerName });
-  }
-
-  for (const attendee of order.checkout_order_attendees || []) {
-    if (!attendee.email) {
-      continue;
-    }
-    const email = attendee.email.trim().toLowerCase();
-    if (!email || uniqueEmails.has(email)) {
-      continue;
-    }
-    uniqueEmails.add(email);
-    recipients.push({ email, name: attendee.full_name });
-  }
-
-  let sentCount = 0;
-  for (const recipient of recipients) {
-    try {
-      const isBuyer = recipient.email === normalizedBuyerEmail;
-      const emailHtml = isBuyer
-        ? buildBuyerConfirmationEmailHtml({
-            attendeeName: recipient.name,
-            eventName: eventSummary?.name || "Wasatch Mahjong Event",
-            eventDate: eventSummary?.event_date || "",
-            attendeeCount,
-            totalAmount,
-          })
-        : buildGuestConfirmationEmailHtml({
-            attendeeName: recipient.name,
-            eventName: eventSummary?.name || "Wasatch Mahjong Event",
-            eventDate: eventSummary?.event_date || "",
-            buyerName,
-          });
-
-      await sendEmail({
-        to: recipient.email,
-        subject: `Wasatch Mahjong Confirmation: ${eventSummary?.name || "Your Event"}`,
-        html: emailHtml,
-      });
-      sentCount += 1;
-    } catch (recipientEmailError) {
-      console.error("Failed to send confirmation email to recipient", {
-        orderId,
-        recipientEmail: recipient.email,
-        error: recipientEmailError,
-      });
-    }
-  }
-
-  if (sentCount > 0) {
-    await supabaseAdmin
-      .from("checkout_orders")
-      .update({ confirmation_email_sent_at: new Date().toISOString() })
-      .eq("id", orderId);
-  }
+function normalizeEmail(value: string | null | undefined) {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
 
 async function ensureEventStripePrice(params: {
