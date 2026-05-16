@@ -245,6 +245,12 @@ export default function AdminPage() {
   const [reconcilingRosters, setReconcilingRosters] = useState(false);
   const [reconcileStatus, setReconcileStatus] = useState("");
 
+  const [addingAttendeeEventId, setAddingAttendeeEventId] = useState<string | null>(null);
+  const [addingAttendeeName, setAddingAttendeeName] = useState("");
+  const [addingAttendeeEmail, setAddingAttendeeEmail] = useState("");
+  const [addingAttendeeStatus, setAddingAttendeeStatus] = useState("");
+  const [addingAttendee, setAddingAttendee] = useState(false);
+
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createStep, setCreateStep] = useState<"type" | "form">("type");
   const [selectedCreateType, setSelectedCreateType] = useState<EventTypeValue | null>(null);
@@ -1190,6 +1196,62 @@ export default function AdminPage() {
     setReconcilingRosters(false);
   };
 
+  const handleAddAttendee = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!addingAttendeeEventId) {
+      return;
+    }
+
+    const name = addingAttendeeName.trim();
+    const email = addingAttendeeEmail.trim();
+
+    if (!name) {
+      setAddingAttendeeStatus("Attendee name is required.");
+      return;
+    }
+
+    setAddingAttendee(true);
+    setAddingAttendeeStatus("");
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const accessToken = session?.access_token;
+
+    if (!accessToken) {
+      setAddingAttendeeStatus("Your session expired. Please sign in again.");
+      setAddingAttendee(false);
+      return;
+    }
+
+    const response = await fetch("/api/admin/add-attendee", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        eventId: addingAttendeeEventId,
+        attendeeName: name,
+        attendeeEmail: email || null,
+      }),
+    });
+
+    const payload = await response.json();
+
+    if (!response.ok) {
+      setAddingAttendeeStatus(payload.error || "Failed to add attendee.");
+      setAddingAttendee(false);
+      return;
+    }
+
+    setAddingAttendeeStatus(payload.message || "Attendee added successfully.");
+    setAddingAttendeeName("");
+    setAddingAttendeeEmail("");
+    await loadEvents();
+    setAddingAttendee(false);
+  };
+
   const handleCancelOrder = async (orderId: string, eventDate: string) => {
     const confirmed = window.confirm(
       "Cancel this paid order? Any eligible refund will be reduced by the $10 cancellation fee."
@@ -1747,6 +1809,69 @@ export default function AdminPage() {
                             </div>
                           )}
                         </div>
+
+                        {addingAttendeeEventId === item.id ? (
+                          <div className="rounded-2xl border border-[color:var(--wasatch-gray)]/20 bg-[color:var(--wasatch-bg2)]/40 p-3 mt-3">
+                            <p className="font-semibold text-[color:var(--wasatch-blue)] mb-2">Add Attendee</p>
+                            <form onSubmit={handleAddAttendee} className="space-y-2">
+                              <div>
+                                <input
+                                  type="text"
+                                  placeholder="Attendee Name"
+                                  value={addingAttendeeName}
+                                  onChange={(e) => setAddingAttendeeName(e.target.value)}
+                                  className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2 text-sm"
+                                />
+                              </div>
+                              <div>
+                                <input
+                                  type="email"
+                                  placeholder="Email (optional)"
+                                  value={addingAttendeeEmail}
+                                  onChange={(e) => setAddingAttendeeEmail(e.target.value)}
+                                  className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2 text-sm"
+                                />
+                              </div>
+                              {addingAttendeeStatus && (
+                                <p className={`text-sm ${addingAttendeeStatus.includes("successfully") || addingAttendeeStatus.includes("added") ? "text-green-600" : "text-red-600"}`}>
+                                  {addingAttendeeStatus}
+                                </p>
+                              )}
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="secondary"
+                                  size="small"
+                                  type="submit"
+                                  disabled={addingAttendee}
+                                >
+                                  {addingAttendee ? "Adding..." : "Add Attendee"}
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="small"
+                                  type="button"
+                                  onClick={() => {
+                                    setAddingAttendeeEventId(null);
+                                    setAddingAttendeeName("");
+                                    setAddingAttendeeEmail("");
+                                    setAddingAttendeeStatus("");
+                                  }}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            </form>
+                          </div>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="small"
+                            onClick={() => setAddingAttendeeEventId(item.id)}
+                            className="mt-2"
+                          >
+                            Add Attendee
+                          </Button>
+                        )}
                       </>
                     ) : (
                       <>
