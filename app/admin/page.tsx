@@ -1840,7 +1840,6 @@ export default function AdminPage() {
                               <div className="flex gap-2">
                                 <Button
                                   variant="secondary"
-                                  size="small"
                                   type="submit"
                                   disabled={addingAttendee}
                                 >
@@ -1848,7 +1847,6 @@ export default function AdminPage() {
                                 </Button>
                                 <Button
                                   variant="outline"
-                                  size="small"
                                   type="button"
                                   onClick={() => {
                                     setAddingAttendeeEventId(null);
@@ -1865,7 +1863,6 @@ export default function AdminPage() {
                         ) : (
                           <Button
                             variant="outline"
-                            size="small"
                             onClick={() => setAddingAttendeeEventId(item.id)}
                             className="mt-2"
                           >
