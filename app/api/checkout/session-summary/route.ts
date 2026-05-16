@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { getStripe } from "@/lib/stripe";
 import { ensureGiftCardFromStripeSession, sendGiftCardDeliveryEmails } from "@/lib/giftCards";
+import { sendOrderConfirmationEmails } from "@/lib/orderConfirmationEmails";
 
 type SummaryOrder = {
   id: string;
@@ -144,6 +145,11 @@ export async function GET(req: NextRequest) {
             error: finalizeError.message,
           });
         } else {
+          order = {
+            ...order,
+            status: "paid",
+          };
+
           const { data: refreshedOrder, error: refreshError } = await supabaseAdmin
             .from("checkout_orders")
             .select(
@@ -168,6 +174,28 @@ export async function GET(req: NextRequest) {
   }
 
   const event = Array.isArray(order.events) ? order.events[0] : order.events;
+
+  if (order.status === "paid" && !order.confirmation_email_sent_at) {
+    try {
+      const { confirmationEmailSentAt } = await sendOrderConfirmationEmails({
+        supabaseAdmin,
+        orderId: order.id,
+        buyerEmail: null,
+        attendeeCount: order.checkout_order_attendees?.length || 0,
+        totalAmount: order.total_amount,
+      });
+
+      if (confirmationEmailSentAt) {
+        order.confirmation_email_sent_at = confirmationEmailSentAt;
+      }
+    } catch (emailFallbackError) {
+      console.error("session-summary confirmation email retry failed", {
+        orderId: order.id,
+        sessionId,
+        error: emailFallbackError,
+      });
+    }
+  }
 
   return NextResponse.json({
     id: order.id,

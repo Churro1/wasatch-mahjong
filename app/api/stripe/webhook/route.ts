@@ -2,82 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { getStripe, getStripeWebhookSecret } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { sendEmail } from "@/lib/sendEmail";
 import { ensureGiftCardFromStripeSession, sendGiftCardDeliveryEmails } from "@/lib/giftCards";
-
-type OrderDetails = {
-  id: string;
-  confirmation_email_sent_at: string | null;
-  checkout_order_attendees:
-    | Array<{
-        full_name: string;
-        email: string | null;
-        is_buyer: boolean;
-      }>
-    | null;
-  events:
-    | {
-        name: string;
-        event_date: string;
-      }
-    | Array<{
-        name: string;
-        event_date: string;
-      }>
-    | null;
-};
-
-function buildBuyerConfirmationEmailHtml(params: {
-  attendeeName: string;
-  eventName: string;
-  eventDate: string;
-  attendeeCount: number;
-  totalAmount: number;
-}) {
-  return `
-    <h1>Wasatch Mahjong Confirmation</h1>
-    <p>Hi ${params.attendeeName},</p>
-    <p>Your registration for <strong>${params.eventName}</strong> is confirmed.</p>
-    <p><strong>Date:</strong> ${params.eventDate}</p>
-    <p><strong>Attendees on Order:</strong> ${params.attendeeCount}</p>
-    <p><strong>Total Paid:</strong> $${(params.totalAmount / 100).toFixed(2)}</p>
-    <h2>Day Of</h2>
-    <ul>
-      <li>Show up 15 minutes early to get signed in and settled.</li>
-      <li>No need to bring tiles.</li>
-      <li>Bring a card if you want.</li>
-    </ul>
-    <h2>Cancellation Policy</h2>
-    <p>Cancellations require at least 24 hours notice and include a $10 cancellation fee.</p>
-  `;
-}
-
-function buildGuestConfirmationEmailHtml(params: {
-  attendeeName: string;
-  eventName: string;
-  eventDate: string;
-  buyerName: string;
-}) {
-  return `
-    <h1>Wasatch Mahjong Confirmation</h1>
-    <p>Hi ${params.attendeeName},</p>
-    <p><strong>${params.buyerName}</strong> has registered you for <strong>${params.eventName}</strong>.</p>
-    <p><strong>Date:</strong> ${params.eventDate}</p>
-    <h2>Day Of</h2>
-    <ul>
-      <li>Show up 15 minutes early to get signed in and settled.</li>
-      <li>No need to bring tiles.</li>
-      <li>Bring a card if you want.</li>
-    </ul>
-    <h2>Cancellation Policy</h2>
-    <p>Cancellations require at least 24 hours notice and include a $10 cancellation fee.</p>
-  `;
-}
-
-type EmailRecipient = {
-  email: string;
-  name: string;
-};
+import { sendOrderConfirmationEmails } from "@/lib/orderConfirmationEmails";
 
 export async function POST(req: NextRequest) {
   const stripe = getStripe();
@@ -101,17 +27,21 @@ export async function POST(req: NextRequest) {
   try {
     const existing = await supabaseAdmin
       .from("webhook_events")
-      .select("id, status")
+      .select("id, status, inserted_at")
       .eq("stripe_event_id", event.id)
       .maybeSingle();
 
     if (existing.data) {
       const existingStatus = existing.data.status;
-      // Already processed successfully or currently being processed — skip reprocessing.
-      if (existingStatus === "succeeded" || existingStatus === "processing") {
+      const insertedAt = existing.data.inserted_at ? new Date(existing.data.inserted_at).getTime() : 0;
+      const isStaleProcessing =
+        existingStatus === "processing" && insertedAt > 0 && Date.now() - insertedAt > 5 * 60 * 1000;
+
+      // Already processed successfully, or the event is still actively being handled.
+      if (existingStatus === "succeeded" || (existingStatus === "processing" && !isStaleProcessing)) {
         return NextResponse.json({ received: true });
       }
-      // If previous attempt failed, mark as processing and continue.
+      // If the previous attempt failed or a processing event has gone stale, mark as processing and continue.
       await supabaseAdmin
         .from("webhook_events")
         .update({ status: "processing", error_text: null })
@@ -233,102 +163,17 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      const { data: orderDetails, error: orderDetailsError } = await supabaseAdmin
-        .from("checkout_orders")
-        .select("id, confirmation_email_sent_at, checkout_order_attendees(full_name, email, is_buyer), events(name, event_date)")
-        .eq("id", finalized.order_id)
-        .single();
-
-      if (orderDetailsError) {
-        console.error("Failed to load order details after finalize", {
-          eventId: event.id,
-          orderId,
-          sessionId: session.id,
-          error: orderDetailsError.message,
-        });
-      }
-
-      const order = orderDetails as OrderDetails | null;
-      const eventSummary = order?.events ? (Array.isArray(order.events) ? order.events[0] : order.events) : null;
       const attendeeCount = finalized.attendee_count || 0;
-      const uniqueEmails = new Set<string>();
-      const recipients: EmailRecipient[] = [];
-
-      if (order?.confirmation_email_sent_at) {
-        // already handled; mark webhook as succeeded and return
-        await supabaseAdmin
-          .from("webhook_events")
-          .update({ status: "succeeded", processed_at: new Date().toISOString() })
-          .eq("stripe_event_id", event.id);
-        return NextResponse.json({ received: true });
-      }
-
       try {
-        const buyerAttendee = (order?.checkout_order_attendees || []).find((attendee) => attendee.is_buyer) || null;
-        const buyerEmailFromOrder = buyerAttendee?.email?.trim().toLowerCase() || "";
-        const buyerEmailFromFinalize =
-          typeof finalized.buyer_email === "string" ? finalized.buyer_email.trim().toLowerCase() : "";
-        const buyerEmail = buyerEmailFromFinalize || buyerEmailFromOrder;
-        const buyerName = buyerAttendee?.full_name || "there";
+        const { sentCount } = await sendOrderConfirmationEmails({
+          supabaseAdmin,
+          orderId: finalized.order_id,
+          buyerEmail: finalized.buyer_email,
+          attendeeCount,
+          totalAmount: finalized.total_amount || 0,
+        });
 
-        if (buyerEmail) {
-          uniqueEmails.add(buyerEmail);
-          recipients.push({ email: buyerEmail, name: buyerName });
-        }
-
-        for (const attendee of order?.checkout_order_attendees || []) {
-          if (!attendee.email) {
-            continue;
-          }
-          const email = attendee.email.trim().toLowerCase();
-          if (!email || uniqueEmails.has(email)) {
-            continue;
-          }
-          uniqueEmails.add(email);
-          recipients.push({ email, name: attendee.full_name });
-        }
-
-        let sentCount = 0;
-        for (const recipient of recipients) {
-          try {
-            const isBuyer = recipient.email === buyerEmail;
-            const emailHtml = isBuyer
-              ? buildBuyerConfirmationEmailHtml({
-                  attendeeName: recipient.name,
-                  eventName: eventSummary?.name || "Wasatch Mahjong Event",
-                  eventDate: eventSummary?.event_date || "",
-                  attendeeCount,
-                  totalAmount: finalized.total_amount || 0,
-                })
-              : buildGuestConfirmationEmailHtml({
-                  attendeeName: recipient.name,
-                  eventName: eventSummary?.name || "Wasatch Mahjong Event",
-                  eventDate: eventSummary?.event_date || "",
-                  buyerName: buyerName,
-                });
-
-            await sendEmail({
-              to: recipient.email,
-              subject: `Wasatch Mahjong Confirmation: ${eventSummary?.name || "Your Event"}`,
-              html: emailHtml,
-            });
-            sentCount += 1;
-          } catch (recipientEmailError) {
-            console.error("Failed to send confirmation email to recipient", {
-              eventId: event.id,
-              orderId: finalized.order_id,
-              recipientEmail: recipient.email,
-              error: recipientEmailError,
-            });
-          }
-        }
-
-        if (sentCount > 0) {
-          await supabaseAdmin
-            .from("checkout_orders")
-            .update({ confirmation_email_sent_at: new Date().toISOString() })
-            .eq("id", finalized.order_id);
-        } else {
+        if (sentCount <= 0) {
           console.error("Confirmation email skipped because no recipient emails were available", {
             eventId: event.id,
             orderId: finalized.order_id,
