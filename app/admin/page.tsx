@@ -251,6 +251,8 @@ export default function AdminPage() {
   const [addingAttendeeStatus, setAddingAttendeeStatus] = useState("");
   const [addingAttendee, setAddingAttendee] = useState(false);
 
+  const [removingAttendeeId, setRemovingAttendeeId] = useState<string | null>(null);
+
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createStep, setCreateStep] = useState<"type" | "form">("type");
   const [selectedCreateType, setSelectedCreateType] = useState<EventTypeValue | null>(null);
@@ -1252,6 +1254,49 @@ export default function AdminPage() {
     setAddingAttendee(false);
   };
 
+  const handleRemoveAttendee = async (signupId: string, eventId: string) => {
+    const confirmed = window.confirm("Remove this attendee from the event?");
+    if (!confirmed) {
+      return;
+    }
+
+    setRemovingAttendeeId(signupId);
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const accessToken = session?.access_token;
+
+    if (!accessToken) {
+      alert("Your session expired. Please sign in again.");
+      setRemovingAttendeeId(null);
+      return;
+    }
+
+    const response = await fetch("/api/admin/remove-attendee", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        signupId,
+        eventId,
+      }),
+    });
+
+    const payload = await response.json();
+
+    if (!response.ok) {
+      alert(payload.error || "Failed to remove attendee.");
+      setRemovingAttendeeId(null);
+      return;
+    }
+
+    await loadEvents();
+    setRemovingAttendeeId(null);
+  };
+
   const handleCancelOrder = async (orderId: string, eventDate: string) => {
     const confirmed = window.confirm(
       "Cancel this paid order? Any eligible refund will be reduced by the $10 cancellation fee."
@@ -1789,21 +1834,31 @@ export default function AdminPage() {
                           ) : (
                             <div className="space-y-2">
                               {item.signups.map((signup) => (
-                                <div key={signup.id} className="text-sm text-[color:var(--wasatch-gray)]">
-                                  <span className="font-medium text-[color:var(--wasatch-blue)]">{signup.attendee_name}</span>
-                                  <span className="ml-2">{signup.attendee_email || "No email"}</span>
-                                  <span className="ml-2">{signup.payment_status}</span>
-                                  <span className="ml-2">{signup.signup_status}</span>
-                                  {signup.is_buyer && signup.order_id && signup.signup_status === "active" && parseISO(item.event_date) > new Date() ? (
+                                <div key={signup.id} className="text-sm text-[color:var(--wasatch-gray)] flex items-center justify-between">
+                                  <div>
+                                    <span className="font-medium text-[color:var(--wasatch-blue)]">{signup.attendee_name}</span>
+                                    <span className="ml-2">{signup.attendee_email || "No email"}</span>
+                                    <span className="ml-2">{signup.payment_status}</span>
+                                    <span className="ml-2">{signup.signup_status}</span>
+                                  </div>
+                                  <div className="flex gap-1">
+                                    {signup.is_buyer && signup.order_id && signup.signup_status === "active" && parseISO(item.event_date) > new Date() ? (
+                                      <Button
+                                        variant="outline"
+                                        disabled={cancellingOrderId === signup.order_id}
+                                        onClick={() => handleCancelOrder(signup.order_id as string, item.event_date)}
+                                      >
+                                        {cancellingOrderId === signup.order_id ? "Cancelling..." : "Cancel Order"}
+                                      </Button>
+                                    ) : null}
                                     <Button
                                       variant="outline"
-                                      className="ml-2"
-                                      disabled={cancellingOrderId === signup.order_id}
-                                      onClick={() => handleCancelOrder(signup.order_id as string, item.event_date)}
+                                      disabled={removingAttendeeId === signup.id}
+                                      onClick={() => handleRemoveAttendee(signup.id, item.id)}
                                     >
-                                      {cancellingOrderId === signup.order_id ? "Cancelling..." : "Cancel Order"}
+                                      {removingAttendeeId === signup.id ? "Removing..." : "Remove"}
                                     </Button>
-                                  ) : null}
+                                  </div>
                                 </div>
                               ))}
                             </div>
