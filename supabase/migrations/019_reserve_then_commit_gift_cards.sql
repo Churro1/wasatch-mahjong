@@ -294,7 +294,7 @@ begin
   select count(*)::integer
   into v_attendee_count
   from public.checkout_order_attendees
-  where order_id = v_order.id;
+  where checkout_order_attendees.order_id = v_order.id;
 
   if v_attendee_count <= 0 then
     raise exception using errcode = 'P0001', message = 'Checkout order has no attendees.';
