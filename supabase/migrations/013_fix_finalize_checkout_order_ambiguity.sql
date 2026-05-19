@@ -5,7 +5,9 @@ create or replace function public.finalize_checkout_order(
   p_order_id uuid,
   p_checkout_session_id text,
   p_payment_intent_id text,
-  p_payment_status text
+  p_payment_status text,
+  p_coupon_code text default null,
+  p_coupon_discount_amount integer default null
 )
 returns table (
   order_id uuid,
@@ -24,8 +26,10 @@ as $$
 declare
   v_order public.checkout_orders%rowtype;
   v_event public.events%rowtype;
+  v_coupon public.coupons%rowtype;
   v_attendee_count integer;
   v_buyer_email text;
+  v_coupon_code text := upper(trim(coalesce(p_coupon_code, '')));
 begin
   select o.*
   into v_order
@@ -56,12 +60,34 @@ begin
     raise exception using errcode = 'P0001', message = 'Checkout order has no attendees.';
   end if;
 
-  if v_order.status = 'paid' then
-    select u.email
-    into v_buyer_email
-    from auth.users as u
-    where u.id = v_order.buyer_user_id;
+  select u.email
+  into v_buyer_email
+  from auth.users as u
+  where u.id = v_order.buyer_user_id;
 
+  if v_coupon_code <> '' and coalesce(p_coupon_discount_amount, 0) > 0 then
+    select *
+    into v_coupon
+    from public.coupons as c
+    where c.code = v_coupon_code
+    limit 1;
+
+    if found then
+      insert into public.coupon_uses (
+        coupon_id,
+        user_id,
+        order_id,
+        discount_amount_cents
+      ) values (
+        v_coupon.id,
+        v_order.buyer_user_id,
+        v_order.id,
+        p_coupon_discount_amount
+      ) on conflict (coupon_id, order_id) do nothing;
+    end if;
+  end if;
+
+  if v_order.status = 'paid' then
     return query
     select
       v_order.id,
@@ -78,11 +104,6 @@ begin
   if coalesce(v_event.spots_remaining, 0) < v_attendee_count then
     raise exception using errcode = 'P0001', message = 'Not enough spots remaining for this order.';
   end if;
-
-  select u.email
-  into v_buyer_email
-  from auth.users as u
-  where u.id = v_order.buyer_user_id;
 
   insert into public.signups (
     user_id,
@@ -140,5 +161,5 @@ begin
 end;
 $$;
 
-grant execute on function public.finalize_checkout_order(uuid, text, text, text)
+grant execute on function public.finalize_checkout_order(uuid, text, text, text, text, integer)
   to authenticated, service_role;

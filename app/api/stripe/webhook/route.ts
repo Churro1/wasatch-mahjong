@@ -87,6 +87,8 @@ export async function POST(req: NextRequest) {
 
       const orderId = session.client_reference_id || session.metadata?.orderId;
       const offerToken = typeof session.metadata?.offerToken === "string" ? session.metadata.offerToken : "";
+      const couponCode = typeof session.metadata?.couponCode === "string" ? session.metadata.couponCode : "";
+      const couponDiscountAmount = Number(session.metadata?.discountAmount || 0);
 
       if (!orderId) {
         console.error("checkout.session.completed missing order reference", { eventId: event.id, sessionId: session.id });
@@ -99,6 +101,8 @@ export async function POST(req: NextRequest) {
         p_payment_intent_id:
           typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id || null,
         p_payment_status: session.payment_status || "paid",
+        p_coupon_code: couponCode || null,
+        p_coupon_discount_amount: couponDiscountAmount > 0 ? couponDiscountAmount : null,
       });
 
       if (finalizeError) {

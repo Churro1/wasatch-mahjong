@@ -128,6 +128,9 @@ export async function GET(req: NextRequest) {
       const sessionPaid = stripeSession.payment_status === "paid";
 
       if (sessionPaid && sessionOrderId === order.id) {
+        const couponCode = typeof stripeSession.metadata?.couponCode === "string" ? stripeSession.metadata.couponCode : "";
+        const couponDiscountAmount = Number(stripeSession.metadata?.discountAmount || 0);
+
         const { error: finalizeError } = await supabaseAdmin.rpc("finalize_checkout_order", {
           p_order_id: order.id,
           p_checkout_session_id: stripeSession.id,
@@ -136,6 +139,8 @@ export async function GET(req: NextRequest) {
               ? stripeSession.payment_intent
               : stripeSession.payment_intent?.id || null,
           p_payment_status: stripeSession.payment_status || "paid",
+          p_coupon_code: couponCode || null,
+          p_coupon_discount_amount: couponDiscountAmount > 0 ? couponDiscountAmount : null,
         });
 
         if (finalizeError) {

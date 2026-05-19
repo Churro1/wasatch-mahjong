@@ -439,6 +439,8 @@ export async function POST(req: NextRequest) {
       p_checkout_session_id: freeSessionId,
       p_payment_intent_id: null,
       p_payment_status: "no_payment_required",
+      p_coupon_code: normalizedCouponCode || null,
+      p_coupon_discount_amount: discountAmount > 0 ? discountAmount : null,
     });
 
     if (finalizeError) {

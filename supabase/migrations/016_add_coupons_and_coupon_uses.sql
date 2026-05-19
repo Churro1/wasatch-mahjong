@@ -28,6 +28,7 @@ create table if not exists public.coupon_uses (
 );
 
 create index if not exists idx_coupon_uses_coupon_id on public.coupon_uses(coupon_id);
+create unique index if not exists idx_coupon_uses_coupon_id_order_id on public.coupon_uses(coupon_id, order_id);
 create index if not exists idx_coupon_uses_user_id on public.coupon_uses(user_id);
 create index if not exists idx_coupon_uses_used_at on public.coupon_uses(used_at desc);
 
