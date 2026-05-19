@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { User } from "@supabase/supabase-js";
@@ -217,6 +217,27 @@ function mergeRosterEntries(
   }
 
   return merged;
+}
+
+function AdminSection(props: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
+  const { title, description, children } = props;
+
+  return (
+    <details className="rounded-2xl shadow-md bg-[#f5f5f5] overflow-hidden">
+      <summary className="list-none cursor-pointer select-none px-6 py-5 flex items-center justify-between gap-4">
+        <div>
+          <h2 className="font-serif text-2xl font-bold text-[color:var(--wasatch-red)]">{title}</h2>
+          {description ? <p className="text-[color:var(--wasatch-gray)] mt-1">{description}</p> : null}
+        </div>
+        <span className="text-[color:var(--wasatch-gray)] text-sm font-medium">Toggle</span>
+      </summary>
+      <div className="px-6 pb-6">{children}</div>
+    </details>
+  );
 }
 
 export default function AdminPage() {
@@ -1633,18 +1654,19 @@ export default function AdminPage() {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
-          <Card>
-            <h2 className="font-serif text-2xl font-bold text-[color:var(--wasatch-red)] mb-4">Create Event</h2>
-            <p className="text-[color:var(--wasatch-gray)] mb-4">
-              Create one-off or repeating events using manual values or saved presets.
-            </p>
+          <AdminSection
+            title="Create Event"
+            description="Create one-off or repeating events using manual values or saved presets."
+          >
             <Button variant="secondary" onClick={openCreateModal}>Create New Event</Button>
 
             {eventsStatus ? <p className="text-sm text-[color:var(--wasatch-blue)] mt-3">{eventsStatus}</p> : null}
-          </Card>
+          </AdminSection>
 
-          <Card>
-            <h2 className="font-serif text-2xl font-bold text-[color:var(--wasatch-red)] mb-4">Preset Manager</h2>
+          <AdminSection
+            title="Preset Manager"
+            description="Save reusable event defaults for faster setup."
+          >
 
             <form onSubmit={handleSavePreset} className="space-y-3 mb-4">
               <div>
@@ -1770,11 +1792,13 @@ export default function AdminPage() {
                 ))
               )}
             </div>
-          </Card>
+          </AdminSection>
         </div>
 
-        <Card>
-          <h2 className="font-serif text-2xl font-bold text-[color:var(--wasatch-red)] mb-4">Event Management</h2>
+        <AdminSection
+          title="Event Management"
+          description="Review, edit, export, and manage all scheduled events."
+        >
 
           {events.length === 0 ? (
             <p className="text-[color:var(--wasatch-gray)]">No events yet. Create your first event above.</p>
@@ -2088,11 +2112,14 @@ export default function AdminPage() {
               })}
             </div>
           )}
-        </Card>
+        </AdminSection>
 
-        <Card>
+        <AdminSection
+          title="Coupon Management"
+          description="Create coupons and review their usage."
+        >
           <div className="flex items-center justify-between gap-3 mb-4">
-            <h2 className="font-serif text-2xl font-bold text-[color:var(--wasatch-red)]">Coupon Management</h2>
+            <div />
             <Button variant="secondary" onClick={handleOpenCouponModal}>
               Create New Coupon
             </Button>
@@ -2162,98 +2189,119 @@ export default function AdminPage() {
               })}
             </div>
           )}
-        </Card>
+        </AdminSection>
 
-        <Card>
-          <h2 className="font-serif text-xl font-bold text-[color:var(--wasatch-red)] mb-3">Admin Access</h2>
-          <p className="text-[color:var(--wasatch-gray)] text-sm mb-4">
-            Add another admin by email or user UUID. This section sits below the event tools on purpose.
-          </p>
-
-          <div className="rounded-2xl border border-[color:var(--wasatch-gray)]/30 bg-white p-4 mb-5">
-            <h3 className="font-serif text-lg font-bold text-[color:var(--wasatch-blue)] mb-2">Email Test</h3>
-            <p className="text-sm text-[color:var(--wasatch-gray)] mb-3">
-              Send a test email to confirm outbound delivery and credentials.
-            </p>
-
-            <form onSubmit={handleSendTestEmail} className="space-y-3 max-w-2xl">
-              <label htmlFor="test-email-to" className="block text-sm font-medium text-[color:var(--wasatch-gray)]">Recipient Email</label>
-              <input
-                id="test-email-to"
-                name="testEmailTo"
-                type="email"
-                value={testEmailTo}
-                onChange={(e) => setTestEmailTo(e.target.value)}
-                className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[color:var(--wasatch-blue)]"
-                placeholder="you@example.com"
-                required
-              />
-              <Button type="submit" variant="secondary" disabled={sendingTestEmail}>
-                {sendingTestEmail ? "Sending..." : "Send Test Email"}
-              </Button>
-            </form>
-
-            {testEmailStatus ? <p className="text-sm text-[color:var(--wasatch-blue)] mt-3">{testEmailStatus}</p> : null}
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2 mb-4">
-            <div className="rounded-2xl border border-[color:var(--wasatch-gray)]/30 bg-white p-4">
-              <form onSubmit={handleAddAdmin} className="space-y-3">
-                <label htmlFor="admin-identifier" className="block text-sm font-medium text-[color:var(--wasatch-gray)]">Add Admin by Email or UUID</label>
-                <input
-                  id="admin-identifier"
-                  name="adminIdentifier"
-                  type="text"
-                  value={adminUserIdInput}
-                  onChange={(e) => setAdminUserIdInput(e.target.value)}
-                  className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[color:var(--wasatch-blue)]"
-                  placeholder="name@example.com or user UUID"
-                />
-                <Button type="submit" variant="primary" disabled={adminSaving}>
-                  {adminSaving ? "Adding..." : "Add Admin"}
-                </Button>
-              </form>
-            </div>
-
-            <div className="rounded-2xl border border-[color:var(--wasatch-gray)]/30 bg-white p-4">
-              <h3 className="font-serif text-lg font-bold text-[color:var(--wasatch-blue)] mb-2">Export All Account Emails</h3>
-              <p className="text-sm text-[color:var(--wasatch-gray)] mb-3">
-                Download a spreadsheet of every Wasatch Mahjong account email.
-              </p>
-              <Button variant="secondary" onClick={handleExportAccountEmails} disabled={exportingAccounts}>
-                {exportingAccounts ? "Exporting..." : "Export Account Emails"}
-              </Button>
-            </div>
-
-            <div className="rounded-2xl border border-[color:var(--wasatch-gray)]/30 bg-white p-4">
-              <h3 className="font-serif text-lg font-bold text-[color:var(--wasatch-blue)] mb-2">Refresh Rosters</h3>
-              <p className="text-sm text-[color:var(--wasatch-gray)] mb-3">
-                Sync any missing paid attendees to the event rosters. Use this if you notice incomplete rosters after checkout.
-              </p>
-              <Button variant="secondary" onClick={handleReconcileRosters} disabled={reconcilingRosters}>
-                {reconcilingRosters ? "Syncing..." : "Refresh Rosters"}
-              </Button>
-              {reconcileStatus ? <p className="text-sm text-[color:var(--wasatch-blue)] mt-2">{reconcileStatus}</p> : null}
-            </div>
-          </div>
-
-          {adminStatus ? <p className="text-sm text-[color:var(--wasatch-blue)] mb-3">{adminStatus}</p> : null}
-
-          <div className="space-y-2">
-            {adminUsers.length === 0 ? (
-              <p className="text-[color:var(--wasatch-gray)] text-sm">No admin users found.</p>
-            ) : (
-              adminUsers.map((adminRow) => (
-                <div key={adminRow.user_id} className="rounded-xl border border-[color:var(--wasatch-gray)]/30 bg-white px-3 py-2">
-                  <p className="text-xs text-[color:var(--wasatch-gray)] break-all">{adminRow.user_id}</p>
-                  <p className="text-xs text-[color:var(--wasatch-gray)] mt-1">
-                    Added {format(parseISO(adminRow.created_at), "MMM d, yyyy h:mm a")}
-                  </p>
+        <AdminSection
+          title="Admin Access"
+          description="Add admins, test email delivery, export account emails, and refresh rosters."
+        >
+          <div className="space-y-4">
+            <details className="rounded-2xl border border-[color:var(--wasatch-gray)]/30 bg-white p-4">
+              <summary className="list-none cursor-pointer select-none flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-serif text-lg font-bold text-[color:var(--wasatch-blue)]">Email Test</h3>
+                  <p className="text-sm text-[color:var(--wasatch-gray)]">Send a test email to confirm outbound delivery and credentials.</p>
                 </div>
-              ))
-            )}
+                <span className="text-[color:var(--wasatch-gray)] text-sm font-medium">Toggle</span>
+              </summary>
+              <div className="pt-4">
+                <form onSubmit={handleSendTestEmail} className="space-y-3 max-w-2xl">
+                  <label htmlFor="test-email-to" className="block text-sm font-medium text-[color:var(--wasatch-gray)]">Recipient Email</label>
+                  <input
+                    id="test-email-to"
+                    name="testEmailTo"
+                    type="email"
+                    value={testEmailTo}
+                    onChange={(e) => setTestEmailTo(e.target.value)}
+                    className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[color:var(--wasatch-blue)]"
+                    placeholder="you@example.com"
+                    required
+                  />
+                  <Button type="submit" variant="secondary" disabled={sendingTestEmail}>
+                    {sendingTestEmail ? "Sending..." : "Send Test Email"}
+                  </Button>
+                </form>
+
+                {testEmailStatus ? <p className="text-sm text-[color:var(--wasatch-blue)] mt-3">{testEmailStatus}</p> : null}
+              </div>
+            </details>
+
+            <details className="rounded-2xl border border-[color:var(--wasatch-gray)]/30 bg-white p-4">
+              <summary className="list-none cursor-pointer select-none flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-serif text-lg font-bold text-[color:var(--wasatch-blue)]">Admin User Tools</h3>
+                  <p className="text-sm text-[color:var(--wasatch-gray)]">Add another admin by email or user UUID.</p>
+                </div>
+                <span className="text-[color:var(--wasatch-gray)] text-sm font-medium">Toggle</span>
+              </summary>
+              <div className="pt-4">
+                <form onSubmit={handleAddAdmin} className="space-y-3">
+                  <label htmlFor="admin-identifier" className="block text-sm font-medium text-[color:var(--wasatch-gray)]">Add Admin by Email or UUID</label>
+                  <input
+                    id="admin-identifier"
+                    name="adminIdentifier"
+                    type="text"
+                    value={adminUserIdInput}
+                    onChange={(e) => setAdminUserIdInput(e.target.value)}
+                    className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[color:var(--wasatch-blue)]"
+                    placeholder="name@example.com or user UUID"
+                  />
+                  <Button type="submit" variant="primary" disabled={adminSaving}>
+                    {adminSaving ? "Adding..." : "Add Admin"}
+                  </Button>
+                </form>
+
+                {adminStatus ? <p className="text-sm text-[color:var(--wasatch-blue)] mt-3">{adminStatus}</p> : null}
+
+                <div className="space-y-2 mt-4">
+                  {adminUsers.length === 0 ? (
+                    <p className="text-[color:var(--wasatch-gray)] text-sm">No admin users found.</p>
+                  ) : (
+                    adminUsers.map((adminRow) => (
+                      <div key={adminRow.user_id} className="rounded-xl border border-[color:var(--wasatch-gray)]/30 bg-white px-3 py-2">
+                        <p className="text-xs text-[color:var(--wasatch-gray)] break-all">{adminRow.user_id}</p>
+                        <p className="text-xs text-[color:var(--wasatch-gray)] mt-1">
+                          Added {format(parseISO(adminRow.created_at), "MMM d, yyyy h:mm a")}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </details>
+
+            <details className="rounded-2xl border border-[color:var(--wasatch-gray)]/30 bg-white p-4">
+              <summary className="list-none cursor-pointer select-none flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-serif text-lg font-bold text-[color:var(--wasatch-blue)]">Account Export</h3>
+                  <p className="text-sm text-[color:var(--wasatch-gray)]">Download a spreadsheet of every Wasatch Mahjong account email.</p>
+                </div>
+                <span className="text-[color:var(--wasatch-gray)] text-sm font-medium">Toggle</span>
+              </summary>
+              <div className="pt-4">
+                <Button variant="secondary" onClick={handleExportAccountEmails} disabled={exportingAccounts}>
+                  {exportingAccounts ? "Exporting..." : "Export Account Emails"}
+                </Button>
+              </div>
+            </details>
+
+            <details className="rounded-2xl border border-[color:var(--wasatch-gray)]/30 bg-white p-4">
+              <summary className="list-none cursor-pointer select-none flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-serif text-lg font-bold text-[color:var(--wasatch-blue)]">Roster Refresh</h3>
+                  <p className="text-sm text-[color:var(--wasatch-gray)]">Sync any missing paid attendees to the event rosters.</p>
+                </div>
+                <span className="text-[color:var(--wasatch-gray)] text-sm font-medium">Toggle</span>
+              </summary>
+              <div className="pt-4">
+                <Button variant="secondary" onClick={handleReconcileRosters} disabled={reconcilingRosters}>
+                  {reconcilingRosters ? "Syncing..." : "Refresh Rosters"}
+                </Button>
+                {reconcileStatus ? <p className="text-sm text-[color:var(--wasatch-blue)] mt-2">{reconcileStatus}</p> : null}
+              </div>
+            </details>
           </div>
-        </Card>
+        </AdminSection>
 
       </div>
 
