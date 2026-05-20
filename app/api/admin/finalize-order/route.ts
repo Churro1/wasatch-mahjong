@@ -45,8 +45,10 @@ export async function POST(req: NextRequest) {
 
   try {
     const { data: finalizedRows, error: finalizeError } = await supabaseAdmin.rpc("finalize_checkout_order", {
-      p_order_id: orderId,
       p_checkout_session_id: checkoutSessionId,
+      p_coupon_code: null,
+      p_coupon_discount_amount: null,
+      p_order_id: orderId,
       p_payment_intent_id: paymentIntentId,
       p_payment_status: paymentStatus,
     });

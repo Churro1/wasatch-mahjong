@@ -132,15 +132,15 @@ export async function GET(req: NextRequest) {
         const couponDiscountAmount = Number(stripeSession.metadata?.discountAmount || 0);
 
         const { error: finalizeError } = await supabaseAdmin.rpc("finalize_checkout_order", {
-          p_order_id: order.id,
           p_checkout_session_id: stripeSession.id,
+          p_coupon_code: couponCode || null,
+          p_coupon_discount_amount: couponDiscountAmount > 0 ? couponDiscountAmount : null,
+          p_order_id: order.id,
           p_payment_intent_id:
             typeof stripeSession.payment_intent === "string"
               ? stripeSession.payment_intent
               : stripeSession.payment_intent?.id || null,
           p_payment_status: stripeSession.payment_status || "paid",
-          p_coupon_code: couponCode || null,
-          p_coupon_discount_amount: couponDiscountAmount > 0 ? couponDiscountAmount : null,
         });
 
         if (finalizeError) {

@@ -5,6 +5,39 @@ import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { ensureGiftCardFromStripeSession, sendGiftCardDeliveryEmails } from "@/lib/giftCards";
 import { sendOrderConfirmationEmails } from "@/lib/orderConfirmationEmails";
 
+async function recordWebhookEvent(
+  supabaseAdmin: ReturnType<typeof getSupabaseAdmin>,
+  event: Stripe.Event,
+  status: "processing" | "succeeded" | "failed",
+  errorText: string | null = null
+) {
+  try {
+    const { error } = await supabaseAdmin
+      .from("webhook_events")
+      .upsert(
+        {
+          stripe_event_id: event.id,
+          event_type: event.type,
+          payload: event,
+          status,
+          error_text: errorText,
+          processed_at: status === "processing" ? null : new Date().toISOString(),
+        },
+        { onConflict: "stripe_event_id" }
+      );
+
+    if (error) {
+      throw error;
+    }
+  } catch (err) {
+    console.error("Webhook event bookkeeping failed", {
+      eventId: event.id,
+      status,
+      err,
+    });
+  }
+}
+
 export async function POST(req: NextRequest) {
   const stripe = getStripe();
   const stripeWebhookSecret = getStripeWebhookSecret();
@@ -23,42 +56,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: (error as Error).message }, { status: 400 });
   }
 
-  // Idempotency guard: record the Stripe event and its processing status.
-  try {
-    const existing = await supabaseAdmin
-      .from("webhook_events")
-      .select("id, status, inserted_at")
-      .eq("stripe_event_id", event.id)
-      .maybeSingle();
-
-    if (existing.data) {
-      const existingStatus = existing.data.status;
-      const insertedAt = existing.data.inserted_at ? new Date(existing.data.inserted_at).getTime() : 0;
-      const isStaleProcessing =
-        existingStatus === "processing" && insertedAt > 0 && Date.now() - insertedAt > 5 * 60 * 1000;
-
-      // Already processed successfully, or the event is still actively being handled.
-      if (existingStatus === "succeeded" || (existingStatus === "processing" && !isStaleProcessing)) {
-        return NextResponse.json({ received: true });
-      }
-      // If the previous attempt failed or a processing event has gone stale, mark as processing and continue.
-      await supabaseAdmin
-        .from("webhook_events")
-        .update({ status: "processing", error_text: null })
-        .eq("stripe_event_id", event.id);
-    } else {
-      await supabaseAdmin.from("webhook_events").insert({
-        stripe_event_id: event.id,
-        event_type: event.type,
-        payload: event,
-        status: "processing",
-      });
-    }
-  } catch (err) {
-    console.error("Failed to record webhook event for idempotency", { eventId: event.id, err });
-    // Do not proceed without recording—return 500 so Stripe will retry.
-    return NextResponse.json({ error: "Failed to record webhook event." }, { status: 500 });
-  }
+  // Best-effort bookkeeping only; business processing still runs even if this write fails.
+  await recordWebhookEvent(supabaseAdmin, event, "processing");
 
   if (event.type === "checkout.session.completed") {
     try {
@@ -82,6 +81,8 @@ export async function POST(req: NextRequest) {
           senderName: session.metadata?.senderName || null,
         });
 
+        await recordWebhookEvent(supabaseAdmin, event, "succeeded");
+
         return NextResponse.json({ received: true });
       }
 
@@ -96,13 +97,13 @@ export async function POST(req: NextRequest) {
       }
 
       const { data: finalizedRows, error: finalizeError } = await supabaseAdmin.rpc("finalize_checkout_order", {
-        p_order_id: orderId,
         p_checkout_session_id: session.id,
+        p_coupon_code: couponCode || null,
+        p_coupon_discount_amount: couponDiscountAmount > 0 ? couponDiscountAmount : null,
+        p_order_id: orderId,
         p_payment_intent_id:
           typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id || null,
         p_payment_status: session.payment_status || "paid",
-        p_coupon_code: couponCode || null,
-        p_coupon_discount_amount: couponDiscountAmount > 0 ? couponDiscountAmount : null,
       });
 
       if (finalizeError) {
@@ -115,11 +116,7 @@ export async function POST(req: NextRequest) {
           details: finalizeError.details,
           hint: finalizeError.hint,
         });
-        // Mark webhook event as failed with details and return 500 so Stripe will retry
-        await supabaseAdmin
-          .from("webhook_events")
-          .update({ status: "failed", error_text: finalizeError.message, processed_at: new Date().toISOString() })
-          .eq("stripe_event_id", event.id);
+        await recordWebhookEvent(supabaseAdmin, event, "failed", finalizeError.message);
         return NextResponse.json({ error: finalizeError.message }, { status: 500 });
       }
 
@@ -184,37 +181,21 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        // Mark webhook event processed successfully
-        await supabaseAdmin
-          .from("webhook_events")
-          .update({ status: "succeeded", processed_at: new Date().toISOString() })
-          .eq("stripe_event_id", event.id);
+        await recordWebhookEvent(supabaseAdmin, event, "succeeded");
       } catch (emailError) {
         console.error("Confirmation email handling failed", {
           eventId: event.id,
           orderId: finalized.order_id,
           error: emailError,
         });
-        // Mark webhook event as failed so it can be retried/inspected
-        await supabaseAdmin
-          .from("webhook_events")
-          .update({ status: "failed", error_text: (emailError as Error).message || String(emailError), processed_at: new Date().toISOString() })
-          .eq("stripe_event_id", event.id);
+        await recordWebhookEvent(supabaseAdmin, event, "failed", (emailError as Error).message || String(emailError));
       }
     } catch (unhandledError) {
       console.error("Unhandled checkout.session.completed webhook failure", {
         eventId: event.id,
         error: unhandledError,
       });
-      // Mark webhook event as failed with error
-      try {
-        await supabaseAdmin
-          .from("webhook_events")
-          .update({ status: "failed", error_text: (unhandledError as Error).message || String(unhandledError), processed_at: new Date().toISOString() })
-          .eq("stripe_event_id", event.id);
-      } catch (recErr) {
-        console.error("Failed to mark webhook event failed", { eventId: event.id, recErr });
-      }
+      await recordWebhookEvent(supabaseAdmin, event, "failed", (unhandledError as Error).message || String(unhandledError));
       return NextResponse.json({ error: "Unhandled checkout completion failure." }, { status: 500 });
     }
   }

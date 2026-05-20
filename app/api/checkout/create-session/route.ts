@@ -435,12 +435,12 @@ export async function POST(req: NextRequest) {
   if (totalAmount === 0) {
     const freeSessionId = `free_${order.id}`;
     const { data: finalizedRows, error: finalizeError } = await supabaseAdmin.rpc("finalize_checkout_order", {
-      p_order_id: order.id,
       p_checkout_session_id: freeSessionId,
-      p_payment_intent_id: null,
-      p_payment_status: "no_payment_required",
       p_coupon_code: normalizedCouponCode || null,
       p_coupon_discount_amount: discountAmount > 0 ? discountAmount : null,
+      p_order_id: order.id,
+      p_payment_intent_id: null,
+      p_payment_status: "no_payment_required",
     });
 
     if (finalizeError) {
