@@ -3,8 +3,8 @@
 
 create or replace function public.finalize_checkout_order(
   p_checkout_session_id text,
-  p_coupon_code text default null,
-  p_coupon_discount_amount integer default null,
+  p_coupon_code text,
+  p_coupon_discount_amount integer,
   p_order_id uuid,
   p_payment_intent_id text,
   p_payment_status text
