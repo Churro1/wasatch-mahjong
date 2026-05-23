@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Missing order reference." }, { status: 400 });
       }
 
-      const { data: finalizedRows, error: finalizeError } = await supabaseAdmin.rpc("finalize_checkout_order", {
+      const { data: finalizedRows, error: finalizeError } = await supabaseAdmin.rpc("finalize_checkout_order_webhook", {
         p_checkout_session_id: session.id,
         p_coupon_code: couponCode || null,
         p_coupon_discount_amount: couponDiscountAmount > 0 ? couponDiscountAmount : null,
