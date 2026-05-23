@@ -39,6 +39,10 @@ async function recordWebhookEvent(
 }
 
 export async function POST(req: NextRequest) {
+  // Runtime build marker to help verify deployed code in logs
+  // Change the marker if you rebuild from a different commit
+  console.log("WEBHOOK_BUILD_MARKER: 81633a0");
+
   const stripe = getStripe();
   const stripeWebhookSecret = getStripeWebhookSecret();
   const supabaseAdmin = getSupabaseAdmin();
@@ -96,6 +100,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Missing order reference." }, { status: 400 });
       }
 
+      console.log("WEBHOOK_RPC_CALL: finalize_checkout_order_webhook", { eventId: event.id });
       const { data: finalizedRows, error: finalizeError } = await supabaseAdmin.rpc("finalize_checkout_order_webhook", {
         p_checkout_session_id: session.id,
         p_coupon_code: couponCode || null,
