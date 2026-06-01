@@ -32,6 +32,7 @@ type CancellationOrder = {
   status: string;
   total_amount: number;
   refund_amount: number | null;
+  refund_reason: string | null;
   cancellation_fee_amount: number;
   stripe_payment_intent_id: string | null;
   events: CancellationEvent | CancellationEvent[] | null;
@@ -103,7 +104,7 @@ export async function POST(req: NextRequest) {
   let orderQuery = supabaseAdmin
     .from("checkout_orders")
     .select(
-      "id, buyer_user_id, status, total_amount, refund_amount, cancellation_fee_amount, stripe_payment_intent_id, events(id, name, event_date, capacity, spots_remaining), checkout_order_attendees(full_name, email, is_buyer), signups(id, signup_status)"
+      "id, buyer_user_id, status, total_amount, refund_amount, refund_reason, cancellation_fee_amount, stripe_payment_intent_id, events(id, name, event_date, capacity, spots_remaining), checkout_order_attendees(full_name, email, is_buyer), signups(id, signup_status)"
     )
     .eq("id", orderId);
 
@@ -121,6 +122,7 @@ export async function POST(req: NextRequest) {
   const event = Array.isArray(order.events) ? order.events[0] : order.events;
   const attendees = order.checkout_order_attendees || [];
   const activeSignupCount = (order.signups || []).filter((signup) => signup.signup_status === "active").length;
+  const alreadyRefundedAmount = Math.max(Number(order.refund_amount || 0), 0);
 
   if (!event) {
     return NextResponse.json({ error: "Event not found for order." }, { status: 400 });
@@ -145,10 +147,12 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let refundAmount = Math.max(order.total_amount - order.cancellation_fee_amount, 0);
+  let refundAmount = Math.max(order.total_amount - alreadyRefundedAmount - order.cancellation_fee_amount, 0);
   if (!issueRefund) {
     refundAmount = 0;
   }
+
+  const totalRefundedAmount = alreadyRefundedAmount + refundAmount;
 
   if (refundAmount > 0) {
     if (!order.stripe_payment_intent_id) {
@@ -192,13 +196,13 @@ export async function POST(req: NextRequest) {
     .from("checkout_orders")
     .update({
       status: nextOrderStatus,
-      refund_amount: refundAmount,
+      refund_amount: totalRefundedAmount,
       stripe_payment_status: refundAmount > 0 ? "refunded" : "cancelled",
       cancellation_requested_at: nowIso,
       cancelled_at: nowIso,
       refunded_at: refundAmount > 0 ? nowIso : null,
       cancellation_reason: cancellationReason || null,
-      refund_reason: refundAmount > 0 ? cancellationReason || "Customer cancellation" : null,
+      refund_reason: refundAmount > 0 ? cancellationReason || "Customer cancellation" : order.refund_reason || null,
       cancelled_by: user.id,
       updated_at: nowIso,
     })

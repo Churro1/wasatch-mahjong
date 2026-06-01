@@ -1275,13 +1275,45 @@ export default function AdminPage() {
     setAddingAttendee(false);
   };
 
-  const handleRemoveAttendee = async (signupId: string, eventId: string) => {
+  const handleRemoveAttendee = async (
+    signup: ManagedEvent["signups"][number],
+    eventId: string
+  ) => {
     const confirmed = window.confirm("Remove this attendee from the event?");
     if (!confirmed) {
       return;
     }
 
-    setRemovingAttendeeId(signupId);
+    let refundAmountCents = 0;
+
+    if (signup.order_id && !signup.is_buyer) {
+      const refundInput = window.prompt(
+        "Optional refund amount in dollars for the buyer (leave blank for no refund):",
+        ""
+      );
+
+      const normalizedRefundInput = refundInput?.trim() || "";
+      if (normalizedRefundInput) {
+        const parsedRefundAmount = Number(normalizedRefundInput.replace(/[$,]/g, ""));
+
+        if (!Number.isFinite(parsedRefundAmount) || parsedRefundAmount <= 0) {
+          alert("Enter a valid refund amount greater than zero.");
+          return;
+        }
+
+        refundAmountCents = Math.round(parsedRefundAmount * 100);
+
+        const refundConfirmed = window.confirm(
+          `Refund $${(refundAmountCents / 100).toFixed(2)} to the buyer and remove this attendee?`
+        );
+
+        if (!refundConfirmed) {
+          return;
+        }
+      }
+    }
+
+    setRemovingAttendeeId(signup.id);
 
     const {
       data: { session },
@@ -1301,8 +1333,9 @@ export default function AdminPage() {
         Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify({
-        signupId,
+        signupId: signup.id,
         eventId,
+        refundAmountCents,
       }),
     });
 
@@ -1875,13 +1908,15 @@ export default function AdminPage() {
                                         {cancellingOrderId === signup.order_id ? "Cancelling..." : "Cancel Order"}
                                       </Button>
                                     ) : null}
-                                    <Button
-                                      variant="outline"
-                                      disabled={removingAttendeeId === signup.id}
-                                      onClick={() => handleRemoveAttendee(signup.id, item.id)}
-                                    >
-                                      {removingAttendeeId === signup.id ? "Removing..." : "Remove"}
-                                    </Button>
+                                    {signup.signup_status === "active" ? (
+                                      <Button
+                                        variant="outline"
+                                        disabled={removingAttendeeId === signup.id}
+                                        onClick={() => handleRemoveAttendee(signup, item.id)}
+                                      >
+                                        {removingAttendeeId === signup.id ? "Removing..." : "Remove"}
+                                      </Button>
+                                    ) : null}
                                   </div>
                                 </div>
                               ))}
