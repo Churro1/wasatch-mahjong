@@ -6,6 +6,8 @@ import { getSiteOrigin } from "@/lib/siteUrl";
 import { dispatchWaitlistOffersForEvent } from "@/lib/waitlist";
 import { sendOrderConfirmationEmails } from "@/lib/orderConfirmationEmails";
 import { normalizeGiftCardCode } from "@/lib/giftCards";
+import { normalizePassCode } from "@/lib/passes";
+
 
 type OrderRow = {
   id: string;
@@ -23,20 +25,16 @@ type OrderRow = {
         phone?: string | null;
         is_buyer: boolean;
       }>
-    import { normalizePassCode } from "@/lib/passes";
     | null;
   events: OrderEvent | Array<OrderEvent> | null;
-      const { passCode } = await req.json();
 };
 
 type OrderEvent = {
-      const normalizedPassCode = normalizePassCode(typeof passCode === "string" ? passCode : "");
   id: string;
   name: string;
   description: string | null;
   event_date: string;
   price: number;
-      let passReservationApplied = false;
   spots_remaining: number | null;
   is_private: boolean;
   event_code: string | null;
@@ -44,46 +42,7 @@ type OrderEvent = {
   stripe_price_id: string | null;
   stripe_price_unit_amount: number | null;
 
-      async function releaseReservedPass() {
-        if (!passReservationApplied) {
-          return;
-        }
 
-        try {
-          await supabaseAdmin.rpc("reverse_pass_redemptions", {
-            p_order_id: order.id,
-          });
-        } catch (releaseError) {
-          console.error("Failed to release reserved pass after checkout error", {
-            orderId: order.id,
-            error: releaseError,
-          });
-        }
-      }
-
-      if (normalizedPassCode) {
-        if (normalizedCouponCode || normalizedGiftCardCode) {
-          return NextResponse.json({ error: "Passes cannot be combined with coupons or gift cards." }, { status: 400 });
-        }
-
-        const { data: passData, error: passError } = await supabaseAdmin.rpc("apply_pass_to_order", {
-          p_order_id: order.id,
-          p_pass_code: normalizedPassCode,
-          p_requested_amount: subtotalAmount,
-        });
-
-        if (passError) {
-          return NextResponse.json({ error: passError.message }, { status: 400 });
-        }
-
-        const passResult = Array.isArray(passData) ? passData[0] : passData;
-        if (!passResult) {
-          return NextResponse.json({ error: "Pass could not be applied." }, { status: 500 });
-        }
-
-        passReservationApplied = true;
-        discountAmount = subtotalAmount;
-      }
   stripe_price_currency: string | null;
 };
 
@@ -220,6 +179,8 @@ export async function POST(req: NextRequest) {
   const normalizedCouponCode = typeof couponCode === "string" ? couponCode.trim().toUpperCase() : "";
   const normalizedGiftCardCode = normalizeGiftCardCode(typeof giftCardCode === "string" ? giftCardCode : "");
   const normalizedEventCode = typeof eventCode === "string" ? eventCode.trim().toUpperCase() : "";
+  const normalizedPassCode = normalizePassCode(typeof passCode === "string" ? passCode : "");
+
   if (!orderId) {
     return NextResponse.json({ error: "Order ID is required." }, { status: 400 });
   }
@@ -379,7 +340,26 @@ export async function POST(req: NextRequest) {
   const subtotalAmount = unitAmount * attendeeCount;
   let discountAmount = 0;
   let giftCardReservationApplied = false;
+  let passReservationApplied = false;
 
+
+
+  async function releaseReservedPass() {
+    if (!passReservationApplied) {
+      return;
+    }
+
+    try {
+      await supabaseAdmin.rpc("reverse_pass_redemptions", {
+        p_order_id: order.id,
+      });
+    } catch (releaseError) {
+      console.error("Failed to release reserved pass after checkout error", {
+        orderId: order.id,
+        error: releaseError,
+      });
+    }
+  }
   async function releaseReservedGiftCard() {
     if (!giftCardReservationApplied) {
       return;
@@ -396,6 +376,30 @@ export async function POST(req: NextRequest) {
       });
     }
   }
+
+  if (normalizedPassCode) {
+    if (normalizedCouponCode || normalizedGiftCardCode) {
+          return NextResponse.json({ error: "Passes cannot be combined with coupons or gift cards." }, { status: 400 });
+        }
+
+        const { data: passData, error: passError } = await supabaseAdmin.rpc("apply_pass_to_order", {
+          p_order_id: order.id,
+          p_pass_code: normalizedPassCode,
+          p_requested_amount: subtotalAmount,
+        });
+
+    if (passError) {
+          return NextResponse.json({ error: passError.message }, { status: 400 });
+        }
+
+        const passResult = Array.isArray(passData) ? passData[0] : passData;
+    if (!passResult) {
+          return NextResponse.json({ error: "Pass could not be applied." }, { status: 500 });
+        }
+
+        passReservationApplied = true;
+        discountAmount = subtotalAmount;
+      }
 
   if (normalizedCouponCode) {
     const { data: couponData, error: couponError } = await supabaseAdmin
