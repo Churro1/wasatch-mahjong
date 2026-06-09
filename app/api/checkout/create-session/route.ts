@@ -23,22 +23,67 @@ type OrderRow = {
         phone?: string | null;
         is_buyer: boolean;
       }>
+    import { normalizePassCode } from "@/lib/passes";
     | null;
   events: OrderEvent | Array<OrderEvent> | null;
+      const { passCode } = await req.json();
 };
 
 type OrderEvent = {
+      const normalizedPassCode = normalizePassCode(typeof passCode === "string" ? passCode : "");
   id: string;
   name: string;
   description: string | null;
   event_date: string;
   price: number;
+      let passReservationApplied = false;
   spots_remaining: number | null;
   is_private: boolean;
   event_code: string | null;
   stripe_product_id: string | null;
   stripe_price_id: string | null;
   stripe_price_unit_amount: number | null;
+
+      async function releaseReservedPass() {
+        if (!passReservationApplied) {
+          return;
+        }
+
+        try {
+          await supabaseAdmin.rpc("reverse_pass_redemptions", {
+            p_order_id: order.id,
+          });
+        } catch (releaseError) {
+          console.error("Failed to release reserved pass after checkout error", {
+            orderId: order.id,
+            error: releaseError,
+          });
+        }
+      }
+
+      if (normalizedPassCode) {
+        if (normalizedCouponCode || normalizedGiftCardCode) {
+          return NextResponse.json({ error: "Passes cannot be combined with coupons or gift cards." }, { status: 400 });
+        }
+
+        const { data: passData, error: passError } = await supabaseAdmin.rpc("apply_pass_to_order", {
+          p_order_id: order.id,
+          p_pass_code: normalizedPassCode,
+          p_requested_amount: subtotalAmount,
+        });
+
+        if (passError) {
+          return NextResponse.json({ error: passError.message }, { status: 400 });
+        }
+
+        const passResult = Array.isArray(passData) ? passData[0] : passData;
+        if (!passResult) {
+          return NextResponse.json({ error: "Pass could not be applied." }, { status: 500 });
+        }
+
+        passReservationApplied = true;
+        discountAmount = subtotalAmount;
+      }
   stripe_price_currency: string | null;
 };
 
@@ -170,7 +215,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  const { orderId, offerToken, couponCode, giftCardCode, eventCode } = await req.json();
+  const { orderId, offerToken, couponCode, giftCardCode, passCode, eventCode } = await req.json();
   const normalizedOfferToken = typeof offerToken === "string" ? offerToken : "";
   const normalizedCouponCode = typeof couponCode === "string" ? couponCode.trim().toUpperCase() : "";
   const normalizedGiftCardCode = normalizeGiftCardCode(typeof giftCardCode === "string" ? giftCardCode : "");
@@ -445,12 +490,14 @@ export async function POST(req: NextRequest) {
 
     if (finalizeError) {
       await releaseReservedGiftCard();
+      await releaseReservedPass();
       return NextResponse.json({ error: finalizeError.message }, { status: 500 });
     }
 
     const finalizedCandidate = Array.isArray(finalizedRows) ? finalizedRows[0] : finalizedRows;
     if (!finalizedCandidate) {
       await releaseReservedGiftCard();
+      await releaseReservedPass();
       return NextResponse.json({ error: "Finalize checkout returned no order." }, { status: 500 });
     }
 
@@ -511,6 +558,7 @@ export async function POST(req: NextRequest) {
       });
     } catch (catalogError) {
       await releaseReservedGiftCard();
+      await releaseReservedPass();
       return NextResponse.json(
         { error: catalogError instanceof Error ? catalogError.message : "Failed to prepare Stripe product pricing." },
         { status: 500 }
@@ -567,6 +615,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (sessionError) {
     await releaseReservedGiftCard();
+    await releaseReservedPass();
     return NextResponse.json(
       {
         error:
@@ -591,6 +640,7 @@ export async function POST(req: NextRequest) {
 
   if (updateError) {
     await releaseReservedGiftCard();
+    await releaseReservedPass();
     return NextResponse.json({ error: updateError.message }, { status: 500 });
   }
 

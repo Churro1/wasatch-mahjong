@@ -148,6 +148,7 @@ export function Header() {
         <div className="flex items-center gap-4">
           <nav className="hidden md:flex gap-6 text-[color:var(--wasatch-gray)] font-sans text-base font-medium">
             <Link href="/events" className="hover:text-[color:var(--wasatch-red)] transition">Events</Link>
+            <Link href="/passes" className="hover:text-[color:var(--wasatch-red)] transition">Passes</Link>
             <Link href="/gift-cards" className="hover:text-[color:var(--wasatch-red)] transition">Gift Cards</Link>
             <Link href="/contact" className="hover:text-[color:var(--wasatch-red)] transition">Contact</Link>
             <Link href="/policy" className="hover:text-[color:var(--wasatch-red)] transition">Policy</Link>
@@ -223,6 +224,7 @@ export function Header() {
 
       <nav className="md:hidden border-t border-[color:var(--wasatch-gray)]/25 px-6 py-2 flex gap-5 text-sm text-[color:var(--wasatch-gray)] font-medium">
         <Link href="/events" className="hover:text-[color:var(--wasatch-red)] transition">Events</Link>
+        <Link href="/passes" className="hover:text-[color:var(--wasatch-red)] transition">Passes</Link>
         <Link href="/gift-cards" className="hover:text-[color:var(--wasatch-red)] transition">Gift Cards</Link>
         <Link href="/contact" className="hover:text-[color:var(--wasatch-red)] transition">Contact</Link>
         <Link href="/policy" className="hover:text-[color:var(--wasatch-red)] transition">Policy</Link>

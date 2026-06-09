@@ -186,6 +186,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: giftCardReversalError.message }, { status: 500 });
   }
 
+  const { error: passReversalError } = await supabaseAdmin.rpc("reverse_pass_redemptions", {
+    p_order_id: order.id,
+  });
+
+  if (passReversalError) {
+    return NextResponse.json({ error: passReversalError.message }, { status: 500 });
+  }
+
   const nowIso = new Date().toISOString();
   const nextOrderStatus = refundAmount > 0 ? "refunded" : "cancelled";
   const nextSignupStatus = refundAmount > 0 ? "refunded" : "cancelled";

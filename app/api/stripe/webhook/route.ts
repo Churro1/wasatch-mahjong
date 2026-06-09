@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { getStripe, getStripeWebhookSecret } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { ensureGiftCardFromStripeSession, sendGiftCardDeliveryEmails } from "@/lib/giftCards";
+import { ensurePassFromStripeSession } from "@/lib/passes";
 import { sendOrderConfirmationEmails } from "@/lib/orderConfirmationEmails";
 
 async function recordWebhookEvent(
@@ -84,6 +85,22 @@ export async function POST(req: NextRequest) {
           giftCard,
           senderName: session.metadata?.senderName || null,
         });
+
+        await recordWebhookEvent(supabaseAdmin, event, "succeeded");
+
+        return NextResponse.json({ received: true });
+      }
+
+      if (purchaseType === "pass") {
+        const pass = await ensurePassFromStripeSession({ supabaseAdmin, session });
+
+        if (!pass) {
+          console.error("checkout.session.completed pass session missing data", {
+            eventId: event.id,
+            sessionId: session.id,
+          });
+          return NextResponse.json({ error: "Pass purchase could not be completed." }, { status: 400 });
+        }
 
         await recordWebhookEvent(supabaseAdmin, event, "succeeded");
 

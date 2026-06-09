@@ -24,11 +24,21 @@ type SummaryResponse = {
   id: string;
   status: string;
   totalAmount: number;
-  type: "event" | "gift_card";
+  type: "event" | "gift_card" | "pass";
   confirmationEmailSentAt: string | null;
   attendees?: SummaryAttendee[];
   event?: SummaryEvent | null;
   giftCardAmount?: number;
+  pass?: {
+    id: string;
+    code: string;
+    pass_slug: string;
+    pass_name: string;
+    total_uses: number;
+    remaining_uses: number;
+    self_only: boolean;
+    open_play_only: boolean;
+  };
   giftCard?: {
     id: string;
     code: string;
@@ -244,6 +254,51 @@ export default function SuccessContent() {
                 </Link>
                 <Link href="/events">
                   <Button variant="outline">Back to Events</Button>
+                </Link>
+              </div>
+            </Card>
+          </>
+        ) : null}
+
+        {!loading && !error && summary && summary.type === "pass" && summary.pass ? (
+          <>
+            <Card>
+              <h2 className="font-serif text-2xl font-bold text-[color:var(--wasatch-red)] mb-4">Pass Purchase</h2>
+              <div className="space-y-3 text-[color:var(--wasatch-gray)]">
+                <div className="rounded-2xl border border-[color:var(--wasatch-gray)]/30 bg-white p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span>Status</span>
+                    <span className="font-medium capitalize">{summary.status.replace(/_/g, " ")}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Pass</span>
+                    <span className="font-medium text-[color:var(--wasatch-blue)]">{summary.pass.pass_name}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Uses Remaining</span>
+                    <span>{summary.pass.remaining_uses} / {summary.pass.total_uses}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-lg font-semibold text-[color:var(--wasatch-blue)]">
+                    <span>Code</span>
+                    <span className="font-mono text-base">{summary.pass.code}</span>
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            <Card>
+              <h2 className="font-serif text-2xl font-bold text-[color:var(--wasatch-red)] mb-4">How to Use It</h2>
+              <div className="space-y-2 text-[color:var(--wasatch-gray)] leading-7">
+                <p>This pass is tied to the buyer&apos;s account and is meant for one person only.</p>
+                <p>Use it for open play bookings only, and only for your own seat.</p>
+                <p>It will be a good fit for the current Social Six Pass and for any future pass products we add.</p>
+              </div>
+              <div className="pt-4 flex flex-col sm:flex-row gap-3">
+                <Link href="/passes">
+                  <Button variant="primary">Back to Passes</Button>
+                </Link>
+                <Link href="/events">
+                  <Button variant="outline">Browse Events</Button>
                 </Link>
               </div>
             </Card>

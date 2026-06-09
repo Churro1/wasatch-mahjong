@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { getStripe } from "@/lib/stripe";
 import { ensureGiftCardFromStripeSession, sendGiftCardDeliveryEmails } from "@/lib/giftCards";
+import { ensurePassFromStripeSession } from "@/lib/passes";
 import { sendOrderConfirmationEmails } from "@/lib/orderConfirmationEmails";
 
 type SummaryOrder = {
@@ -42,6 +43,17 @@ type GiftCardSummary = {
   email_sent_at: string | null;
 };
 
+type PassSummary = {
+  id: string;
+  code: string;
+  pass_slug: string;
+  pass_name: string;
+  total_uses: number;
+  remaining_uses: number;
+  self_only: boolean;
+  open_play_only: boolean;
+};
+
 export async function GET(req: NextRequest) {
   const supabaseAdmin = getSupabaseAdmin();
   const stripe = getStripe();
@@ -75,6 +87,37 @@ export async function GET(req: NextRequest) {
     const stripeSession = await stripe.checkout.sessions.retrieve(sessionId);
     const sessionOrderId = stripeSession.client_reference_id || stripeSession.metadata?.orderId;
     const purchaseType = stripeSession.metadata?.purchaseType;
+
+    if (purchaseType === "pass") {
+      if (stripeSession.metadata?.purchaserUserId !== user.id) {
+        return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+      }
+
+      const pass = await ensurePassFromStripeSession({ supabaseAdmin, session: stripeSession });
+      if (!pass) {
+        return NextResponse.json({ error: "Pass purchase summary not found." }, { status: 404 });
+      }
+
+      const passSummary: PassSummary = {
+        id: pass.id,
+        code: pass.code,
+        pass_slug: pass.pass_slug,
+        pass_name: pass.pass_name,
+        total_uses: pass.total_uses,
+        remaining_uses: pass.remaining_uses,
+        self_only: pass.self_only,
+        open_play_only: pass.open_play_only,
+      };
+
+      return NextResponse.json({
+        type: "pass",
+        id: sessionOrderId || pass.id,
+        status: pass.status,
+        totalAmount: Number(stripeSession.metadata?.passPrice || 10000),
+        confirmationEmailSentAt: null,
+        pass: passSummary,
+      });
+    }
 
     if (purchaseType !== "gift_card") {
       return NextResponse.json({ error: "Order summary not found." }, { status: 404 });

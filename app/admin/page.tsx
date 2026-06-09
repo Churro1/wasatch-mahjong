@@ -108,6 +108,16 @@ type Coupon = {
   createdAt: string;
 };
 
+type AdminPass = {
+  id: string;
+  pass_name: string;
+  code: string;
+  remaining_uses: number;
+  total_uses: number;
+  user_id: string;
+  created_at: string;
+};
+
 type CouponUsage = {
   userId: string;
   usageCount: number;
@@ -339,6 +349,9 @@ export default function AdminPage() {
   const [viewingCouponUsageId, setViewingCouponUsageId] = useState<string | null>(null);
   const [couponUsage, setCouponUsage] = useState<{ coupon: { id: string; code: string; discountType: string; discountValue: number }; usage: CouponUsage[] } | null>(null);
   const [deletingCouponId, setDeletingCouponId] = useState<string | null>(null);
+  
+  const [adminPasses, setAdminPasses] = useState<AdminPass[]>([]);
+  const [passesStatus, setPassesStatus] = useState("");
 
   const activePresets = useMemo(
     () => presets.filter((preset) => preset.is_active),
@@ -410,6 +423,20 @@ export default function AdminPage() {
     }));
 
     setPresets(normalized as EventPreset[]);
+  }
+
+  async function loadAdminPasses() {
+    const { data, error } = await supabase
+      .from("passes")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      setPassesStatus(error.message);
+      return;
+    }
+
+    setAdminPasses(data || []);
   }
 
   const handleAddAdmin = async (e: FormEvent<HTMLFormElement>) => {
@@ -1465,7 +1492,7 @@ export default function AdminPage() {
       }
 
       setIsAdmin(true);
-      await Promise.all([loadAdminUsers(), loadEvents(), loadPresets(), loadCoupons()]);
+      await Promise.all([loadAdminUsers(), loadEvents(), loadPresets(), loadCoupons(), loadAdminPasses()]);
       setLoading(false);
     }
 
@@ -2222,6 +2249,35 @@ export default function AdminPage() {
                   </div>
                 );
               })}
+            </div>
+          )}
+        </AdminSection>
+
+        <AdminSection
+          title="Pass Management"
+          description="View purchased passes and their remaining uses."
+        >
+          {passesStatus ? <p className="text-sm text-[color:var(--wasatch-blue)] mb-4">{passesStatus}</p> : null}
+
+          {adminPasses.length === 0 ? (
+            <p className="text-[color:var(--wasatch-gray)]">No passes have been purchased yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {adminPasses.map((pass) => (
+                <div key={pass.id} className="rounded-2xl border border-[color:var(--wasatch-gray)]/30 bg-white px-4 py-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-serif text-lg font-bold text-[color:var(--wasatch-blue)]">{pass.pass_name}</h3>
+                    <p className="text-sm text-[color:var(--wasatch-gray)]">
+                      Code: <span className="font-mono font-medium text-[color:var(--wasatch-blue)]">{pass.code}</span>
+                    </p>
+                    <p className="text-xs text-[color:var(--wasatch-gray)] mt-1">Purchased: {format(parseISO(pass.created_at), "MMM d, yyyy")}</p>
+                  </div>
+                  <div className="text-left md:text-right">
+                    <p className="text-sm text-[color:var(--wasatch-gray)]">Uses Remaining</p>
+                    <p className="font-semibold text-[color:var(--wasatch-red)]">{pass.remaining_uses} / {pass.total_uses}</p>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </AdminSection>

@@ -41,6 +41,14 @@ type UpcomingBooking = {
   attendees: OrderAttendee[];
 };
 
+type UserPass = {
+  id: string;
+  pass_name: string;
+  code: string;
+  remaining_uses: number;
+  total_uses: number;
+};
+
 const CANCELLATION_NOTICE_MS = 24 * 60 * 60 * 1000;
 
 function canSelfCancel(eventDate: string) {
@@ -55,6 +63,7 @@ export default function DashboardPage() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileStatus, setProfileStatus] = useState("");
   const [upcomingBookings, setUpcomingBookings] = useState<UpcomingBooking[]>([]);
+  const [userPasses, setUserPasses] = useState<UserPass[]>([]);
   const [classLoadError, setClassLoadError] = useState("");
   const [cancelLoadingId, setCancelLoadingId] = useState<string | null>(null);
   const [cancelStatus, setCancelStatus] = useState("");
@@ -107,6 +116,20 @@ export default function DashboardPage() {
     setClassLoadError("");
   };
 
+  const loadPasses = async (userId: string) => {
+    const { data, error } = await supabase
+      .from("passes")
+      .select("id, pass_name, code, remaining_uses, total_uses")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Could not load passes:", error);
+      return;
+    }
+    setUserPasses(data || []);
+  };
+
   useEffect(() => {
     const loadDashboard = async () => {
       const {
@@ -122,7 +145,7 @@ export default function DashboardPage() {
       setName((user.user_metadata?.full_name as string | undefined) || "");
       setEmail(user.email || "");
 
-      await loadBookings(user.id);
+      await Promise.all([loadBookings(user.id), loadPasses(user.id)]);
 
       setLoading(false);
     };
@@ -344,6 +367,26 @@ export default function DashboardPage() {
             {resetMessage ? <p className="text-sm text-[color:var(--wasatch-blue)] mt-3">{resetMessage}</p> : null}
           </Card>
         </div>
+
+        {userPasses.length > 0 ? (
+          <Card>
+            <h2 className="font-serif text-2xl font-bold text-[color:var(--wasatch-red)] mb-4">My Passes</h2>
+            <div className="grid gap-4 md:grid-cols-2">
+              {userPasses.map((pass) => (
+                <div key={pass.id} className="rounded-2xl border border-[color:var(--wasatch-gray)]/30 bg-white p-4 flex flex-col justify-between">
+                  <div className="flex items-start justify-between mb-3">
+                    <h3 className="font-serif text-lg font-bold text-[color:var(--wasatch-blue)]">{pass.pass_name}</h3>
+                    <span className="text-xs font-mono bg-[color:var(--wasatch-bg2)] text-[color:var(--wasatch-gray)] px-2 py-1 rounded-md border border-[color:var(--wasatch-gray)]/20">{pass.code}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm text-[color:var(--wasatch-gray)]">
+                    <span>Uses Remaining</span>
+                    <span className="font-semibold text-[color:var(--wasatch-blue)]">{pass.remaining_uses} / {pass.total_uses}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        ) : null}
 
         <Card>
           <div className="flex items-center justify-between gap-3 mb-4">

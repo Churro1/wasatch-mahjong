@@ -63,6 +63,16 @@ type AppliedGiftCard = {
   currency: string;
 };
 
+type AppliedPass = {
+  code: string;
+  passName: string;
+  remainingUses: number;
+  availableUses: number;
+  appliedUses: number;
+  openPlayOnly: boolean;
+  selfOnly: boolean;
+};
+
 const MAX_ATTENDEES = 4;
 
 function toCartTypeLabel(type: CartEvent["event_type"]): string {
@@ -113,6 +123,10 @@ export default function CartContent() {
   const [giftCardError, setGiftCardError] = useState("");
   const [applyingGiftCard, setApplyingGiftCard] = useState(false);
   const [appliedGiftCard, setAppliedGiftCard] = useState<AppliedGiftCard | null>(null);
+  const [passCode, setPassCode] = useState("");
+  const [passError, setPassError] = useState("");
+  const [applyingPass, setApplyingPass] = useState(false);
+  const [appliedPass, setAppliedPass] = useState<AppliedPass | null>(null);
 
   const cartPath = useMemo(() => {
     if (!eventId) {
@@ -124,6 +138,10 @@ export default function CartContent() {
   }, [eventCode, eventId, offerToken]);
 
   const attendeeLimit = useMemo(() => {
+    if (appliedPass) {
+      return 1;
+    }
+
     if (offerToken) {
       return 1;
     }
@@ -181,9 +199,17 @@ export default function CartContent() {
     return Math.min(totalAfterCoupon, appliedGiftCard.availableAmount);
   }, [appliedGiftCard, totalAfterCoupon]);
 
+  const passAmount = useMemo(() => {
+    if (!appliedPass || totalAfterCoupon <= 0) {
+      return 0;
+    }
+
+    return totalAfterCoupon;
+  }, [appliedPass, totalAfterCoupon]);
+
   const totalAfterDiscount = useMemo(() => {
-    return Math.max(0, totalAfterCoupon - giftCardAmount);
-  }, [giftCardAmount, totalAfterCoupon]);
+    return Math.max(0, totalAfterCoupon - giftCardAmount - passAmount);
+  }, [giftCardAmount, passAmount, totalAfterCoupon]);
 
   useEffect(() => {
     async function loadCart() {
@@ -505,10 +531,76 @@ export default function CartContent() {
     setApplyingGiftCard(false);
   };
 
+  const handleApplyPass = async () => {
+    const normalizedCode = passCode.trim().toUpperCase();
+    if (!normalizedCode) {
+      setPassError("Please enter a pass code.");
+      return;
+    }
+
+    if (!event || attendees.length !== 1) {
+      setPassError("Add exactly one attendee before applying a pass.");
+      return;
+    }
+
+    setApplyingPass(true);
+    setPassError("");
+
+    try {
+      const response = await fetch("/api/checkout/validate-pass", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          passCode: normalizedCode,
+          eventId,
+          attendeeCount: attendees.length,
+        }),
+      });
+
+      const payload = (await response.json()) as {
+        error?: string;
+        pass?: {
+          code: string;
+          passName: string;
+          remainingUses: number;
+          availableUses: number;
+          appliedUses: number;
+          openPlayOnly: boolean;
+          selfOnly: boolean;
+        };
+      };
+
+      if (!response.ok || !payload.pass) {
+        setPassError(payload.error || "Unable to apply this pass.");
+        setAppliedPass(null);
+        setApplyingPass(false);
+        return;
+      }
+
+      setAppliedPass(payload.pass);
+      setPassCode(payload.pass.code);
+      setPassError("");
+      setStatusMessage("Pass applied.");
+    } catch {
+      setPassError("We could not validate that pass. Please try again.");
+      setAppliedPass(null);
+    }
+
+    setApplyingPass(false);
+  };
+
   const handleRemoveGiftCard = () => {
     setAppliedGiftCard(null);
     setGiftCardCode("");
     setGiftCardError("");
+  };
+
+  const handleRemovePass = () => {
+    setAppliedPass(null);
+    setPassCode("");
+    setPassError("");
   };
 
   const handleRemoveCoupon = () => {
@@ -545,6 +637,11 @@ export default function CartContent() {
 
     if (!trimmedAttendees.some((attendee) => attendee.is_buyer)) {
       setError("The buyer must be included as one attendee.");
+      return false;
+    }
+
+    if (appliedPass && trimmedAttendees.length !== 1) {
+      setError("Passes can only be used for one attendee.");
       return false;
     }
 
@@ -678,6 +775,7 @@ export default function CartContent() {
         eventCode: eventCode || undefined,
         couponCode: appliedCoupon?.code || undefined,
         giftCardCode: appliedGiftCard?.code || undefined,
+        passCode: appliedPass?.code || undefined,
       }),
     });
 
@@ -719,6 +817,45 @@ export default function CartContent() {
         <div>
           <h1 className="font-serif text-3xl md:text-4xl font-bold text-[color:var(--wasatch-blue)] text-center mb-2">
             Cart
+
+                <div className="rounded-2xl border border-[color:var(--wasatch-gray)]/30 bg-white p-4 space-y-2">
+                  <label htmlFor="cart-pass-code" className="block text-sm font-medium text-[color:var(--wasatch-gray)]">
+                    Pass Code
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      id="cart-pass-code"
+                      name="cartPassCode"
+                      type="text"
+                      value={passCode}
+                      onChange={(e) => {
+                        setPassCode(e.target.value.toUpperCase());
+                        setPassError("");
+                      }}
+                      placeholder="Enter pass code"
+                      className="w-full rounded-2xl border border-[color:var(--wasatch-gray)] bg-white px-4 py-2"
+                      maxLength={24}
+                      disabled={applyingPass}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleApplyPass}
+                      disabled={applyingPass || !passCode.trim()}
+                    >
+                      {applyingPass ? "Applying..." : "Apply"}
+                    </Button>
+                  </div>
+                  {appliedPass ? (
+                    <div className="flex items-center justify-between text-sm text-green-700">
+                      <span>Applied: {appliedPass.passName}</span>
+                      <button type="button" onClick={handleRemovePass} className="underline">
+                        Remove
+                      </button>
+                    </div>
+                  ) : null}
+                  {passError ? <p className="text-sm text-[color:var(--wasatch-red)]">{passError}</p> : null}
+                </div>
           </h1>
           <p className="text-[color:var(--wasatch-gray)] text-center">
             Add the attendees for this event before checkout.
@@ -827,6 +964,11 @@ export default function CartContent() {
               <p className="text-xs text-[color:var(--wasatch-gray)] mt-3">
                 Maximum {attendeeLimit} attendee(s) for this event. The buyer must be one of them.
               </p>
+              {appliedPass ? (
+                <p className="text-xs text-[color:var(--wasatch-blue)] mt-2">
+                  Passes are for one attendee only and can be used on open play bookings only.
+                </p>
+              ) : null}
               {offerToken ? (
                 <p className="text-xs text-[color:var(--wasatch-blue)] mt-2">
                   This cart is tied to a private waitlist offer and can be used for one seat only.
@@ -878,6 +1020,12 @@ export default function CartContent() {
                     <div className="flex items-center justify-between text-green-700">
                       <span>Gift Card ({appliedGiftCard.code})</span>
                       <span>- ${giftCardAmount.toFixed(2)}</span>
+                    </div>
+                  ) : null}
+                  {appliedPass ? (
+                    <div className="flex items-center justify-between text-green-700">
+                      <span>Pass ({appliedPass.code})</span>
+                      <span>- ${passAmount.toFixed(2)}</span>
                     </div>
                   ) : null}
                   <div className="flex items-center justify-between text-lg font-semibold text-[color:var(--wasatch-blue)] pt-2">
