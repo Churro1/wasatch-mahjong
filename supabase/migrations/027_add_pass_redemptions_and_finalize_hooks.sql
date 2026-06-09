@@ -33,6 +33,7 @@ declare
   v_normalized_code text := upper(regexp_replace(coalesce(p_pass_code, ''), '[^a-zA-Z0-9]', '', 'g'));
   v_apply_uses integer := 1;
   v_reservation_expires_at timestamptz := now() + interval '2 hours';
+  v_attendee_count integer := 0;
 begin
   if p_requested_amount is null or p_requested_amount < 0 then
     raise exception using errcode = 'P0001', message = 'Checkout amount must be valid.';
@@ -107,7 +108,6 @@ begin
   select coalesce(sum(r.used_uses), 0)::integer
   into v_other_reserved
   from public.pass_redemptions r
-          v_attendee_count integer := 0;
   where r.pass_id = v_pass.id
     and r.reversed_at is null
     and r.committed_at is null
@@ -118,8 +118,22 @@ begin
     raise exception using errcode = 'P0001', message = 'This pass has no remaining uses.';
   end if;
 
-  if attendees_count(v_order.id) <> 1 then
+  select count(*)::integer
+  into v_attendee_count
+  from public.checkout_order_attendees as attendees
+  where attendees.order_id = v_order.id;
+
+  if v_attendee_count <> 1 then
     raise exception using errcode = 'P0001', message = 'Passes can only be used for one attendee.';
+  end if;
+
+  if not exists (
+    select 1
+    from public.checkout_order_attendees as attendees
+    where attendees.order_id = v_order.id
+      and attendees.is_buyer = true
+  ) then
+    raise exception using errcode = 'P0001', message = 'The buyer must be included when using a pass.';
   end if;
 
   v_apply_uses := least(1, greatest(v_pass.remaining_uses - v_other_reserved, 0));
@@ -192,23 +206,6 @@ begin
     from public.pass_redemptions r
     where r.order_id = p_order_id
       and r.reversed_at is null
-          select count(*)::integer
-          into v_attendee_count
-          from public.checkout_order_attendees as attendees
-          where attendees.order_id = v_order.id;
-
-          if v_attendee_count <> 1 then
-            raise exception using errcode = 'P0001', message = 'Passes can only be used for one attendee.';
-          end if;
-
-          if not exists (
-            select 1
-            from public.checkout_order_attendees as attendees
-            where attendees.order_id = v_order.id
-              and attendees.is_buyer = true
-          ) then
-            raise exception using errcode = 'P0001', message = 'The buyer must be included when using a pass.';
-          end if;
       and r.committed_at is null
     for update
   loop
