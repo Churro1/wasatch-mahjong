@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let refundableOrderId: string | null = signup.order_id;
+  const refundableOrderId: string | null = signup.order_id;
   let orderRefundAmount = 0;
 
   if (shouldRefund) {

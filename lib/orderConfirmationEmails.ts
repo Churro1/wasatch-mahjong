@@ -1,4 +1,5 @@
 import { sendEmail } from "@/lib/sendEmail";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 type OrderDetails = {
   id: string;
@@ -75,7 +76,7 @@ function buildGuestConfirmationEmailHtml(params: {
 }
 
 export async function sendOrderConfirmationEmails(params: {
-  supabaseAdmin: any;
+  supabaseAdmin: ReturnType<typeof getSupabaseAdmin>;
   orderId: string;
   buyerEmail: string | null;
   attendeeCount: number;
