@@ -380,13 +380,16 @@ export default function CheckoutContent() {
               </p>
 
               <div className="flex flex-col sm:flex-row gap-3 pt-1">
-                <Button
+                {/* <Button
                   variant="primary"
                   onClick={handleContinue}
                   className="w-full sm:w-auto"
                 >
                   Continue to Cart
-                </Button>
+                </Button> */}
+                <p className="text-sm text-black-70">
+                  Please wait until maintenence is done at 10:00 PM MST on July 3rd, 2026 before continuing to checkout.
+                </p>
                 <Link href="/events" className="w-full sm:w-auto">
                   <Button variant="outline" className="w-full sm:w-auto">
                     Back to Events
