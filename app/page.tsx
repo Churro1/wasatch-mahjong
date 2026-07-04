@@ -103,11 +103,6 @@ export default function Home() {
         <p className="max-w-xl text-lg md:text-xl text-[color:var(--wasatch-gray)] mb-8 font-sans">
           Salt Lake City&apos;s friendliest American Mahjong club. Join us for open play nights, fun classes, and a warm, welcoming community!
         </p>
-          <div className="flex flex-wrap items-center justify-center gap-3 bg-yellow-500 text-white p-6 rounded-md">
-          <p className="max-w-xl text-lg md:text-xl text-[color:var(--wasatch-red)] mb-8 font-sans">
-            Warning! Website will be down for maintenance on July 3rd, 2026 from 8:40 AM to 10:00 PM MST. We apologize for any inconvenience this may cause.
-          </p>
-        </div>
         <div className="flex flex-wrap items-center justify-center gap-3">
           <Link href="/events">
             <Button variant="primary" className="text-lg px-8 py-3 shadow-lg">View Events</Button>
