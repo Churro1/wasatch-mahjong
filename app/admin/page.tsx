@@ -1075,7 +1075,7 @@ export default function AdminPage() {
     setSavingEdit(true);
     setEventsStatus("");
 
-    const { error } = await supabase
+    const { data: updatedEvents, error } = await supabase
       .from("events")
       .update({
         name: editName.trim(),
@@ -1087,7 +1087,8 @@ export default function AdminPage() {
         capacity: nextCapacity,
         spots_remaining: nextSpots,
       })
-      .eq("id", eventId);
+      .eq("id", eventId)
+      .select("id, name, description, event_date, event_type, is_private, event_code, price, capacity, spots_remaining, series_id, series_position, signups(id, order_id, attendee_name, attendee_email, is_buyer, payment_status, signup_status), checkout_orders(id, status, checkout_order_attendees(id, order_id, full_name, email, is_buyer))");
 
     if (error) {
       setEventsStatus(error.message);
@@ -1095,8 +1096,22 @@ export default function AdminPage() {
       return;
     }
 
+    if (!updatedEvents || updatedEvents.length === 0) {
+      setEventsStatus("Event update failed, likely due to an expired session. Please refresh and log in again.");
+      setSavingEdit(false);
+      return;
+    }
+    
+    const normalized = (updatedEvents || []).map((row: ManagedEventRow): ManagedEvent => ({
+      ...row,
+      price: Number(row.price),
+      signups: mergeRosterEntries(row.signups || [], row.checkout_orders || []),
+    }));
+
+    const updatedEvent = normalized[0];
+
+    setEvents(events.map(event => event.id === eventId ? updatedEvent : event));
     setEventsStatus("Event updated.");
-    await loadEvents();
     cancelEdit();
     setSavingEdit(false);
   };
