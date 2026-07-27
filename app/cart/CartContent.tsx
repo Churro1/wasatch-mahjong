@@ -547,10 +547,22 @@ export default function CartContent() {
     setPassError("");
 
     try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const accessToken = session?.access_token;
+      if (!accessToken) {
+        setPassError("You must be logged in to apply a pass.");
+        setApplyingPass(false);
+        return;
+      }
+
       const response = await fetch("/api/checkout/validate-pass", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
           passCode: normalizedCode,

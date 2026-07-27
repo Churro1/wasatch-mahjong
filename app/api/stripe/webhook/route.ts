@@ -4,6 +4,7 @@ import { getStripe, getStripeWebhookSecret } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { ensureGiftCardFromStripeSession, sendGiftCardDeliveryEmails } from "@/lib/giftCards";
 import { ensurePassFromStripeSession } from "@/lib/passes";
+import { sendPassDeliveryEmail } from "@/lib/passEmails";
 import { sendOrderConfirmationEmails } from "@/lib/orderConfirmationEmails";
 
 async function recordWebhookEvent(
@@ -101,6 +102,8 @@ export async function POST(req: NextRequest) {
           });
           return NextResponse.json({ error: "Pass purchase could not be completed." }, { status: 400 });
         }
+
+        await sendPassDeliveryEmail({ supabaseAdmin, pass });
 
         await recordWebhookEvent(supabaseAdmin, event, "succeeded");
 

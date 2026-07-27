@@ -37,6 +37,7 @@ export type PassRecord = {
   redeemed_at: string | null;
   created_at: string;
   updated_at: string;
+  email_sent_at: string | null;
 };
 
 type SupabaseAdminClient = ReturnType<typeof getSupabaseAdmin>;
@@ -102,7 +103,7 @@ export async function ensurePassFromStripeSession(params: {
   const { data: existingPass, error: existingError } = await supabaseAdmin
     .from("passes")
     .select(
-      "id, code, pass_slug, pass_name, total_uses, remaining_uses, currency, status, issued_by_user_id, purchaser_email, purchaser_name, recipient_name, recipient_email, notes, expires_at, stripe_checkout_session_id, stripe_payment_intent_id, purchase_source, open_play_only, self_only, issued_at, redeemed_at, created_at, updated_at"
+      "id, code, pass_slug, pass_name, total_uses, remaining_uses, currency, status, issued_by_user_id, purchaser_email, purchaser_name, recipient_name, recipient_email, notes, expires_at, stripe_checkout_session_id, stripe_payment_intent_id, purchase_source, open_play_only, self_only, issued_at, redeemed_at, created_at, updated_at, email_sent_at"
     )
     .eq("stripe_checkout_session_id", session.id)
     .maybeSingle();
@@ -152,7 +153,7 @@ export async function ensurePassFromStripeSession(params: {
         self_only: passProduct.selfOnly,
       })
       .select(
-        "id, code, pass_slug, pass_name, total_uses, remaining_uses, currency, status, issued_by_user_id, purchaser_email, purchaser_name, recipient_name, recipient_email, notes, expires_at, stripe_checkout_session_id, stripe_payment_intent_id, purchase_source, open_play_only, self_only, issued_at, redeemed_at, created_at, updated_at"
+        "id, code, pass_slug, pass_name, total_uses, remaining_uses, currency, status, issued_by_user_id, purchaser_email, purchaser_name, recipient_name, recipient_email, notes, expires_at, stripe_checkout_session_id, stripe_payment_intent_id, purchase_source, open_play_only, self_only, issued_at, redeemed_at, created_at, updated_at, email_sent_at"
       )
       .single();
 
