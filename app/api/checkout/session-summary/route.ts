@@ -52,6 +52,7 @@ type PassSummary = {
   remaining_uses: number;
   self_only: boolean;
   open_play_only: boolean;
+  status: "active" | "redeemed" | "void" | "expired";
 };
 
 export async function GET(req: NextRequest) {
@@ -107,6 +108,7 @@ export async function GET(req: NextRequest) {
         remaining_uses: pass.remaining_uses,
         self_only: pass.self_only,
         open_play_only: pass.open_play_only,
+        status: pass.status,
       };
 
       return NextResponse.json({
