@@ -176,7 +176,7 @@ export async function GET(req: NextRequest) {
         const couponCode = typeof stripeSession.metadata?.couponCode === "string" ? stripeSession.metadata.couponCode : "";
         const couponDiscountAmount = Number(stripeSession.metadata?.discountAmount || 0);
 
-        const { error: finalizeError } = await supabaseAdmin.rpc("finalize_checkout_order", {
+        const { error: finalizeError } = await supabaseAdmin.rpc("finalize_checkout_order_webhook", {
           p_checkout_session_id: stripeSession.id,
           p_coupon_code: couponCode || null,
           p_coupon_discount_amount: couponDiscountAmount > 0 ? couponDiscountAmount : null,
