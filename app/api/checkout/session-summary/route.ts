@@ -11,6 +11,7 @@ type SummaryOrder = {
   status: string;
   total_amount: number;
   gift_card_amount: number;
+  confirmation_email_sent_at: string | null;
   checkout_order_attendees:
     | Array<{
         full_name: string;
@@ -85,31 +86,19 @@ export async function GET(req: NextRequest) {
     .single();
 
   if (error || !data) {
-    const stripeSession = await stripe.checkout.sessions.retrieve(sessionId);
+    const stripeSession = await stripe.checkout.sessions.retrieve(sessionId, { expand: ["payment_intent"] });
     const sessionOrderId = stripeSession.client_reference_id || stripeSession.metadata?.orderId;
     const purchaseType = stripeSession.metadata?.purchaseType;
 
-    if (purchaseType === "pass") {
-      if (stripeSession.metadata?.purchaserUserId !== user.id) {
-        return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-      }
+    if (stripeSession.metadata?.purchaserUserId !== user.id) {
+      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    }
 
+    if (purchaseType === "pass") {
       const pass = await ensurePassFromStripeSession({ supabaseAdmin, session: stripeSession });
       if (!pass) {
         return NextResponse.json({ error: "Pass purchase summary not found." }, { status: 404 });
       }
-
-      const passSummary: PassSummary = {
-        id: pass.id,
-        code: pass.code,
-        pass_slug: pass.pass_slug,
-        pass_name: pass.pass_name,
-        total_uses: pass.total_uses,
-        remaining_uses: pass.remaining_uses,
-        self_only: pass.self_only,
-        open_play_only: pass.open_play_only,
-        status: pass.status,
-      };
 
       return NextResponse.json({
         type: "pass",
@@ -117,74 +106,76 @@ export async function GET(req: NextRequest) {
         status: pass.status,
         totalAmount: Number(stripeSession.metadata?.passPrice || 10000),
         confirmationEmailSentAt: null,
-        pass: passSummary,
+        pass: {
+          id: pass.id,
+          code: pass.code,
+          pass_slug: pass.pass_slug,
+          pass_name: pass.pass_name,
+          total_uses: pass.total_uses,
+          remaining_uses: pass.remaining_uses,
+          self_only: pass.self_only,
+          open_play_only: pass.open_play_only,
+          status: pass.status,
+        } as PassSummary,
       });
     }
 
-    if (purchaseType !== "gift_card") {
-      return NextResponse.json({ error: "Order summary not found." }, { status: 404 });
+    if (purchaseType === "gift_card") {
+      const giftCard = await ensureGiftCardFromStripeSession({ supabaseAdmin, session: stripeSession });
+      if (!giftCard) {
+        return NextResponse.json({ error: "Gift card purchase summary not found." }, { status: 404 });
+      }
+
+      const sentCount = await sendGiftCardDeliveryEmails({
+        supabaseAdmin,
+        giftCard,
+        senderName: stripeSession.metadata?.senderName || null,
+      });
+      const confirmationEmailSentAt = sentCount > 0 ? new Date().toISOString() : giftCard.email_sent_at || null;
+
+      return NextResponse.json({
+        type: "gift_card",
+        id: sessionOrderId || giftCard.id,
+        status: giftCard.status,
+        totalAmount: giftCard.original_amount,
+        confirmationEmailSentAt,
+        giftCard: {
+          id: giftCard.id,
+          code: giftCard.code,
+          original_amount: giftCard.original_amount,
+          remaining_amount: giftCard.remaining_amount,
+          recipient_name: giftCard.recipient_name,
+          recipient_email: giftCard.recipient_email,
+          message: giftCard.message,
+          email_sent_at: confirmationEmailSentAt,
+        } as GiftCardSummary,
+      });
     }
 
-    if (stripeSession.metadata?.purchaserUserId !== user.id) {
-      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-    }
-
-    const giftCard = await ensureGiftCardFromStripeSession({ supabaseAdmin, session: stripeSession });
-    if (!giftCard) {
-      return NextResponse.json({ error: "Gift card purchase summary not found." }, { status: 404 });
-    }
-
-    const sentCount = await sendGiftCardDeliveryEmails({
-      supabaseAdmin,
-      giftCard,
-      senderName: stripeSession.metadata?.senderName || null,
-    });
-    const confirmationEmailSentAt = sentCount > 0 ? new Date().toISOString() : giftCard.email_sent_at || null;
-
-    const giftCardSummary: GiftCardSummary = {
-      id: giftCard.id,
-      code: giftCard.code,
-      original_amount: giftCard.original_amount,
-      remaining_amount: giftCard.remaining_amount,
-      recipient_name: giftCard.recipient_name,
-      recipient_email: giftCard.recipient_email,
-      message: giftCard.message,
-      email_sent_at: confirmationEmailSentAt,
-    };
-
-    return NextResponse.json({
-      type: "gift_card",
-      id: sessionOrderId || giftCard.id,
-      status: giftCard.status,
-      totalAmount: giftCard.original_amount,
-      confirmationEmailSentAt,
-      giftCard: giftCardSummary,
-    });
+    return NextResponse.json({ error: "Order summary not found." }, { status: 404 });
   }
 
-  let order = data as SummaryOrder & { confirmation_email_sent_at?: string | null };
+  let order: SummaryOrder = data;
 
   // Recovery path: if webhook delivery is delayed/missed, finalize from success page request
   // using trusted Stripe session state. finalize_checkout_order is idempotent.
   if (order.status !== "paid") {
     try {
-      const stripeSession = await stripe.checkout.sessions.retrieve(sessionId);
+      const stripeSession = await stripe.checkout.sessions.retrieve(sessionId, { expand: ["payment_intent"] });
       const sessionOrderId = stripeSession.client_reference_id || stripeSession.metadata?.orderId;
       const sessionPaid = stripeSession.payment_status === "paid";
 
       if (sessionPaid && sessionOrderId === order.id) {
         const couponCode = typeof stripeSession.metadata?.couponCode === "string" ? stripeSession.metadata.couponCode : "";
         const couponDiscountAmount = Number(stripeSession.metadata?.discountAmount || 0);
-
+        const paymentIntent = stripeSession.payment_intent;
+        
         const { error: finalizeError } = await supabaseAdmin.rpc("finalize_checkout_order_webhook", {
           p_checkout_session_id: stripeSession.id,
           p_coupon_code: couponCode || null,
           p_coupon_discount_amount: couponDiscountAmount > 0 ? couponDiscountAmount : null,
           p_order_id: order.id,
-          p_payment_intent_id:
-            typeof stripeSession.payment_intent === "string"
-              ? stripeSession.payment_intent
-              : stripeSession.payment_intent?.id || null,
+          p_payment_intent_id: typeof paymentIntent === "string" ? paymentIntent : paymentIntent?.id || null,
           p_payment_status: stripeSession.payment_status || "paid",
         });
 
@@ -209,9 +200,7 @@ export async function GET(req: NextRequest) {
             .eq("buyer_user_id", user.id)
             .single();
 
-          if (!refreshError && refreshedOrder) {
-            order = refreshedOrder as SummaryOrder & { confirmation_email_sent_at?: string | null };
-          }
+          if (!refreshError && refreshedOrder) order = refreshedOrder;
         }
       }
     } catch (fallbackError) {
@@ -252,7 +241,7 @@ export async function GET(req: NextRequest) {
     status: order.status,
     totalAmount: order.total_amount,
     giftCardAmount: order.gift_card_amount || 0,
-    confirmationEmailSentAt: order.confirmation_email_sent_at || null,
+    confirmationEmailSentAt: order.confirmation_email_sent_at,
     attendees: order.checkout_order_attendees || [],
     event,
     type: "event",
