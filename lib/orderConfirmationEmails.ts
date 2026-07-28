@@ -1,5 +1,6 @@
 import { sendEmail } from "@/lib/sendEmail";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { formatInTimeZone } from "date-fns-tz";
 
 type OrderDetails = {
   id: string;
@@ -27,6 +28,19 @@ type EmailRecipient = {
   email: string;
   name: string;
 };
+
+function formatEventDate(dateString: string) {
+  if (!dateString) {
+    return "Date not specified";
+  }
+  const timeZone = "America/Denver";
+  try {
+    return formatInTimeZone(new Date(dateString), timeZone, "MMMM d, yyyy 'at' h:mm a zzz");
+  } catch (error) {
+    console.error("Failed to format event date", { dateString, error });
+    return "Date not specified";
+  }
+}
 
 function buildBuyerConfirmationEmailHtml(params: {
   attendeeName: string;
@@ -133,18 +147,20 @@ export async function sendOrderConfirmationEmails(params: {
   for (const recipient of recipients) {
     try {
       const isBuyer = recipient.email === normalizedBuyerEmail;
+      const formattedEventDate = formatEventDate(eventSummary?.event_date || "");
+
       const emailHtml = isBuyer
         ? buildBuyerConfirmationEmailHtml({
             attendeeName: recipient.name,
             eventName: eventSummary?.name || "Wasatch Mahjong Event",
-            eventDate: eventSummary?.event_date || "",
+            eventDate: formattedEventDate,
             attendeeCount,
             totalAmount,
           })
         : buildGuestConfirmationEmailHtml({
             attendeeName: recipient.name,
             eventName: eventSummary?.name || "Wasatch Mahjong Event",
-            eventDate: eventSummary?.event_date || "",
+            eventDate: formattedEventDate,
             buyerName,
           });
 
