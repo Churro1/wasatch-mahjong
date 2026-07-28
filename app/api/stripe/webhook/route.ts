@@ -157,7 +157,7 @@ export async function POST(req: NextRequest) {
       }
 
       const finalized = finalizedCandidate as {
-        order_id: string;
+        result_order_id: string;
         buyer_user_id: string;
         buyer_email: string | null;
         attendee_count: number;
@@ -171,7 +171,7 @@ export async function POST(req: NextRequest) {
             status: "claimed",
             claimed_at: new Date().toISOString(),
             claimed_by_user_id: finalized.buyer_user_id,
-            claimed_order_id: finalized.order_id,
+            claimed_order_id: finalized.result_order_id,
           })
           .eq("offer_token", offerToken)
           .eq("status", "active")
@@ -193,7 +193,7 @@ export async function POST(req: NextRequest) {
       try {
         const { sentCount } = await sendOrderConfirmationEmails({
           supabaseAdmin,
-          orderId: finalized.order_id,
+          orderId: finalized.result_order_id,
           buyerEmail: finalized.buyer_email,
           attendeeCount,
           totalAmount: finalized.total_amount || 0,
@@ -202,7 +202,7 @@ export async function POST(req: NextRequest) {
         if (sentCount <= 0) {
           console.error("Confirmation email skipped because no recipient emails were available", {
             eventId: event.id,
-            orderId: finalized.order_id,
+            orderId: finalized.result_order_id,
           });
         }
 

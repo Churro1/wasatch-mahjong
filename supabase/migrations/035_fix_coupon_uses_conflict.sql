@@ -10,7 +10,7 @@ create or replace function public.finalize_checkout_order(
   p_coupon_discount_amount integer default null
 )
 returns table (
-  order_id uuid,
+  result_order_id uuid,
   buyer_user_id uuid,
   buyer_email text,
   event_id uuid,
@@ -177,7 +177,7 @@ create or replace function public.finalize_checkout_order_webhook(
   p_payment_status text
 )
 returns table (
-  order_id uuid,
+  result_order_id uuid,
   buyer_user_id uuid,
   buyer_email text,
   event_id uuid,
