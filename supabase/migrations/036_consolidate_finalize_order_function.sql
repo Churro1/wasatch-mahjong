@@ -3,6 +3,9 @@
 -- finalize_checkout_order_webhook to resolve a recurring 'order_id' ambiguity issue.
 -- It ensures the returned column is named 'result_order_id' to avoid conflicts.
 
+drop function if exists public.finalize_checkout_order(uuid, text, text, text, text, integer);
+drop function if exists public.finalize_checkout_order_webhook(text, text, integer, uuid, text, text);
+
 create or replace function public.finalize_checkout_order(
   p_order_id uuid,
   p_checkout_session_id text,
