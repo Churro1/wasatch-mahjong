@@ -83,8 +83,8 @@ begin
         v_order.buyer_user_id,
         v_order.id,
         p_coupon_discount_amount
-      ) on conflict (coupon_id, public.coupon_uses.order_id) do update
-      set discount_amount_cents = excluded.discount_amount_cents;
+      ) on conflict on constraint idx_coupon_uses_coupon_id_order_id do update
+        set discount_amount_cents = excluded.discount_amount_cents;
     end if;
   end if;
 
@@ -250,8 +250,8 @@ begin
         v_order.buyer_user_id,
         v_order.id,
         p_coupon_discount_amount
-      ) on conflict (coupon_id, public.coupon_uses.order_id) do update
-      set discount_amount_cents = excluded.discount_amount_cents;
+      ) on conflict on constraint idx_coupon_uses_coupon_id_order_id do update
+        set discount_amount_cents = excluded.discount_amount_cents;
     end if;
   end if;
 
@@ -291,7 +291,7 @@ begin
     v_order.event_id,
     v_order.id,
     'paid',
-    attendees.full_.name,
+    attendees.full_name,
     nullif(trim(coalesce(attendees.email, '')), ''),
     attendees.is_buyer,
     'active'
