@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz";
 import { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
 import { Card } from "@/components/Card";
@@ -170,14 +171,16 @@ function toDateDayValue(dateInput: string): number {
   return parsed.getDay();
 }
 
+function formatEventDate(isoDate: string): string {
+  return formatInTimeZone(new Date(isoDate), "America/Denver", "EEEE, MMMM d, yyyy 'at' h:mm a");
+}
+
 function toLocalDateInput(isoDate: string): string {
-  const date = new Date(isoDate);
-  return format(date, "yyyy-MM-dd");
+  return formatInTimeZone(new Date(isoDate), "America/Denver", "yyyy-MM-dd");
 }
 
 function toLocalTimeInput(isoDate: string): string {
-  const date = new Date(isoDate);
-  return format(date, "HH:mm");
+  return formatInTimeZone(new Date(isoDate), "America/Denver", "HH:mm");
 }
 
 function generateEventCode(length = 8): string {
@@ -740,6 +743,8 @@ export default function AdminPage() {
       return;
     }
 
+    const eventDateInTimezone = formatInTimeZone(eventDate, 'America/Denver', "yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
+
     const selectedCost = toNumber(createForm.cost);
     const selectedSpots = toNumber(createForm.spotsAvailable);
 
@@ -771,7 +776,7 @@ export default function AdminPage() {
       const { error } = await supabase.from("events").insert({
         name: createForm.title.trim(),
         description: createForm.description.trim() || null,
-        event_date: eventDate.toISOString(),
+        event_date: eventDateInTimezone,
         event_type: selectedCreateType,
         is_private: createIsPrivate,
         event_code: createIsPrivate ? normalizedCreateCode : null,
@@ -852,7 +857,7 @@ export default function AdminPage() {
         setCreatingEvent(false);
         return;
       }
-      endAt = repeatEnd.toISOString();
+      endAt = formatInTimeZone(repeatEnd, 'America/Denver', "yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
     } else {
       occurrenceCount = toNumber(repeatCount);
       if (Number.isNaN(occurrenceCount) || occurrenceCount <= 0) {
@@ -869,7 +874,7 @@ export default function AdminPage() {
       p_event_type: selectedCreateType,
       p_price: selectedCost,
       p_capacity: selectedSpots,
-      p_start_at: eventDate.toISOString(),
+      p_start_at: eventDateInTimezone,
       p_recurrence_unit: recurrenceUnit,
       p_interval_count: intervalCount,
       p_weekdays: weekdays,
@@ -1043,6 +1048,8 @@ export default function AdminPage() {
       return;
     }
 
+    const eventDateInTimezone = formatInTimeZone(eventDate, 'America/Denver', "yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
+
     const nextPrice = Number(editPrice);
     const nextCapacity = Number(editCapacity);
     const nextSpots = Number(editSpots);
@@ -1080,7 +1087,7 @@ export default function AdminPage() {
       .update({
         name: editName.trim(),
         description: editDescription.trim() || null,
-        event_date: eventDate.toISOString(),
+        event_date: eventDateInTimezone,
         is_private: editIsPrivate,
         event_code: editIsPrivate ? normalizedEditCode : null,
         price: nextPrice,
@@ -1894,7 +1901,7 @@ export default function AdminPage() {
                           <div>
                             <h3 className="font-serif text-xl font-bold text-[color:var(--wasatch-blue)]">{item.name}</h3>
                             <p className="text-sm text-[color:var(--wasatch-gray)]">
-                              {format(parseISO(item.event_date), "EEEE, MMMM d, yyyy 'at' h:mm a")}
+                              {formatEventDate(item.event_date)}
                             </p>
                             <p className="text-xs text-[color:var(--wasatch-blue)] mt-1">{toEventTypeLabel(item.event_type)}</p>
                           </div>
