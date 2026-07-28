@@ -210,7 +210,7 @@ export async function POST(req: NextRequest) {
       } catch (emailError) {
         console.error("Confirmation email handling failed", {
           eventId: event.id,
-          orderId: finalized.order_id,
+          orderId: finalized.result_order_id,
           error: emailError,
         });
         await recordWebhookEvent(supabaseAdmin, event, "failed", (emailError as Error).message || String(emailError));
