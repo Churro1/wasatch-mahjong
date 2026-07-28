@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { formatInTimeZone } from "date-fns-tz";
 
 function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -90,6 +91,7 @@ export async function POST(req: NextRequest) {
   ];
 
   const rows: string[] = [header.map(escapeCsvValue).join(",")];
+  const eventDateInTimezone = formatInTimeZone(new Date(eventRow.event_date), "America/Denver", "yyyy-MM-dd h:mm a");
 
   for (const order of orders || []) {
     const attendees = order.checkout_order_attendees || [];
@@ -98,7 +100,7 @@ export async function POST(req: NextRequest) {
         [
           eventRow.id,
           eventRow.name,
-          eventRow.event_date,
+          eventDateInTimezone,
           order.id,
           attendee.full_name || "",
           attendee.email || "",
@@ -113,7 +115,7 @@ export async function POST(req: NextRequest) {
 
   const csvBody = `\uFEFF${rows.join("\n")}`;
   const safeEventName = sanitizeFilePart(eventRow.name || "event");
-  const safeDate = eventRow.event_date.slice(0, 10);
+  const safeDate = formatInTimeZone(new Date(eventRow.event_date), "America/Denver", "yyyy-MM-dd");
   const filename = `${safeEventName || "event"}-${safeDate}-contacts.csv`;
 
   return new NextResponse(csvBody, {
