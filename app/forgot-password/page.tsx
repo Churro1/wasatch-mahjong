@@ -25,7 +25,7 @@ export default function ForgotPasswordPage() {
     if (resetError) {
       setError(resetError.message);
     } else {
-      setMessage("Password reset email sent. Please check your inbox.");
+      setMessage("Password reset email sent. Please check your inbox. If you don&apos;t see it, check your spam or promotions folders.");
     }
 
     setLoading(false);

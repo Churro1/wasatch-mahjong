@@ -261,7 +261,7 @@ export default function DashboardPage() {
 
     setProfileStatus(
       updates.email
-        ? "Profile saved. Check your inbox to confirm your new email address."
+        ? "Profile saved. Check your inbox for a confirmation email. If you don&apos;t see it, check your spam or promotions folder."
         : "Profile saved successfully."
     );
     setProfileSaving(false);
@@ -286,7 +286,7 @@ export default function DashboardPage() {
       return;
     }
 
-    setResetMessage("Password reset email sent. Please check your inbox.");
+    setResetMessage("Password reset email sent. Please check your inbox. If you don&apos;t see it, check your spam or promotions folders.");
     setResetLoading(false);
   };
 

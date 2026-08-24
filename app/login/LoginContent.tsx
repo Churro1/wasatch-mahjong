@@ -91,6 +91,12 @@ export default function LoginContent() {
           <Button type="submit" variant="primary" className="w-full" disabled={loading}>
             {loading ? "Please wait..." : isLogin ? "Log In" : "Create Account"}
           </Button>
+
+          {!isLogin ? (
+            <p className="text-xs text-[color:var(--wasatch-gray)] text-center pt-1">
+              If you don&apos;t see the email in your primary inbox, check your spam or promotions folder.
+            </p>
+          ) : null}
         </form>
 
         <div className="mt-4 flex items-center justify-between text-sm">

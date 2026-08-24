@@ -116,7 +116,7 @@ export default function WaitlistContent() {
       return;
     }
 
-    setStatus(payload.message || "You are on the waitlist. Check your email for next steps.");
+    setStatus(payload.message || "You are on the waitlist. Check your email for next steps. If you don&apos;t see it, check your spam or promotions folders.");
     setSubmitting(false);
   };
 
@@ -150,7 +150,7 @@ export default function WaitlistContent() {
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
               <p className="font-medium text-amber-800">You are already on the waitlist</p>
               <p className="text-sm text-amber-700 mt-1">
-                We&apos;ll email you at <strong>{userEmail}</strong> if a spot opens. Check your inbox and spam folder for our emails.
+                We&apos;ll email you at <strong>{userEmail}</strong> if a spot opens. Please check your inbox, and if you don&apos;t see it, check your spam or promotions folder.
               </p>
             </div>
           ) : null}
